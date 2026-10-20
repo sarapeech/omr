@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ตรวจข้อสอบ OMR</title>
+<meta name="description" content="ตรวจกระดาษคำตอบแบบฝนด้วยกล้องมือถือ ส่งคะแนนเข้า Google Sheet">
+<meta name="theme-color" content="#1f4fa8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ตรวจข้อสอบ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-thai-400.woff2) format('woff2');font-weight:400;unicode-range:U+0E00-0E7F;font-display:swap}
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-thai-600.woff2) format('woff2');font-weight:500 600;unicode-range:U+0E00-0E7F;font-display:swap}
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-thai-700.woff2) format('woff2');font-weight:700;unicode-range:U+0E00-0E7F;font-display:swap}
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-latin-400.woff2) format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-latin-600.woff2) format('woff2');font-weight:500 600;font-display:swap}
+@font-face{font-family:Sarabun;src:url(fonts/sarabun-latin-700.woff2) format('woff2');font-weight:700;font-display:swap}
+/* Layout: one working column (max 1080px) under a sticky tab rail; the answer-form blue is the accent. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --sunk:#e9edf3; --line:#d3d9e3; --ink:#18202c; --muted:#5b6678;
+  --accent:#1f4fa8; --accent-ink:#ffffff; --accent-soft:#e2eaf8;
+  --ok:#17784a; --ok-soft:#dff2e8; --bad:#b4302a; --bad-soft:#fae3e1; --warn:#9a6200; --warn-soft:#fbefd6;
+  --ui:Sarabun,"Noto Sans Thai",system-ui,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11151c; --surface:#1a2029; --sunk:#232b37; --line:#2f3947; --ink:#e7ecf3; --muted:#9aa6b8;
+  --accent:#7ea6f2; --accent-ink:#0d1320; --accent-soft:#1f2c45;
+  --ok:#5cc792; --ok-soft:#173326; --bad:#f08a80; --bad-soft:#3a1f1d; --warn:#e5b45a; --warn-soft:#382c14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151c; --surface:#1a2029; --sunk:#232b37; --line:#2f3947; --ink:#e7ecf3; --muted:#9aa6b8;
+  --accent:#7ea6f2; --accent-ink:#0d1320; --accent-soft:#1f2c45;
+  --ok:#5cc792; --ok-soft:#173326; --bad:#f08a80; --bad-soft:#3a1f1d; --warn:#e5b45a; --warn-soft:#382c14; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--bg);color:var(--ink);font:15.5px/1.6 var(--ui);margin:0;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:20px 12px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{flex:none}
+.brand h1{font-size:20px;line-height:1.2;margin:0;font-weight:700}
+.brand small{display:block;color:var(--muted);font-size:12.5px;font-weight:400}
+.exam-pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,input[type=text],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;font-weight:500;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover,.btn:hover{border-color:var(--accent)}
+.btn.primary,button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+button.danger{color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);padding-block:4px 0;scrollbar-width:none}
+nav.tabs button{border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--muted);padding:9px 14px;border-bottom:2px solid transparent}
+nav.tabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+nav.tabs .count{font-family:var(--mono);font-size:12px;background:var(--sunk);border-radius:20px;padding:0 7px;color:var(--muted)}
+section.panel{padding-top:20px;display:grid;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.card h2{font-size:16px;margin:0 0 4px}
+.card h3{font-size:14.5px;margin:0 0 6px}
+.hint{color:var(--muted);font-size:13.5px;margin:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grow{flex:1 1 200px;min-width:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:20px;padding:1px 9px;font-size:12.5px;font-weight:500;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.plain{background:var(--sunk);color:var(--muted)}
+/* key grid */
+.keygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:2px 18px}
+.krow{display:flex;align-items:center;gap:4px;padding:2px 0}
+.krow .n{width:30px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--muted);margin-right:4px}
+.bub{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);font-size:12px;padding:0;justify-content:center;line-height:1}
+.bub:hover{border-color:var(--accent)}
+.bub.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.bub.on.right{background:var(--ok);border-color:var(--ok)}
+.bub.on.wrong{background:var(--bad);border-color:var(--bad)}
+.bub.det{box-shadow:0 0 0 2px var(--warn)}
+.krow.missing .n{color:var(--bad);font-weight:600}
+/* drop zone */
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:26px 18px;display:grid;gap:12px;justify-items:center;text-align:center;background:var(--surface)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.btn.big,button.big{padding:11px 20px;font-size:16px}
+.latest{display:grid;gap:14px}
+.latest.okb{border-color:var(--ok)} .latest.warnb{border-color:var(--warn)} .latest.badb{border-color:var(--bad)}
+.latest-main{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-start;justify-content:space-between}
+.latest-score{font-size:44px;font-weight:600;line-height:1.1}
+.latest-score small{font-size:20px;color:var(--muted);font-weight:400}
+.progress{height:6px;border-radius:6px;background:var(--sunk);overflow:hidden;width:100%;max-width:420px}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+/* tables */
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:12.5px;background:var(--sunk);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover{background:var(--accent-soft)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px}
+.stat b{display:block;font-family:var(--mono);font-size:22px;font-weight:600;line-height:1.3}
+.stat span{font-size:12.5px;color:var(--muted)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.choicebar{display:flex;height:16px;border-radius:4px;overflow:hidden;min-width:150px;background:var(--sunk)}
+.choicebar i{display:block;height:100%}
+/* review drawer */
+.overlay{position:fixed;inset:0;background:rgba(10,14,20,.55);z-index:20;display:flex;justify-content:flex-end}
+.drawer{background:var(--bg);width:min(1000px,100%);height:100%;overflow:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer-head{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px 16px;z-index:2}
+.drawer-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;padding:16px}
+@media (max-width:760px){.drawer-body{grid-template-columns:minmax(0,1fr)}}
+.sheetview{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.sheetview canvas{display:block;width:100%;height:auto}
+.toast{z-index:60!important;position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;z-index:40;font-size:14px;max-width:calc(100% - 32px)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:8px 12px}
+.sheetprev{max-width:340px;width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.two{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:700px){.two{grid-template-columns:minmax(0,1fr)}}
+ol.tips{margin:6px 0 0;padding-left:20px;display:grid;gap:4px}
+.hist{display:flex;align-items:flex-end;gap:2px;height:110px;padding-top:6px}
+.hist div{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:1px;opacity:.85}
+.histax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.hdr-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.syncchip{border:0;cursor:pointer;font:inherit;font-size:13px;padding:4px 11px}
+#layer2 .overlay{z-index:45}
+.steps{margin:6px 0 10px;padding-left:22px;display:grid;gap:10px}
+pre.code{max-height:260px;overflow:auto;background:var(--sunk);border-radius:8px;padding:10px;font:12px/1.5 var(--mono);white-space:pre}
+summary{cursor:pointer}
+.cam{position:fixed;inset:0;z-index:30;background:#000;color:#fff}
+.cam video,.cam #camOv{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.camtop{position:absolute;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 18px max(12px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(0,0,0,.7),rgba(0,0,0,0))}
+.camtop>div{flex:1;min-width:0;display:grid;line-height:1.35}
+.camtop>div b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.camtop span{font-size:13px;opacity:.85}
+.camtop button{background:rgba(255,255,255,.16);color:#fff;border-color:transparent}
+.camtop button.primary{background:#2f6fe0;color:#fff}
+.camtop button.on{background:#f1c40f;color:#111}
+.camhint{position:absolute;left:50%;transform:translateX(-50%);top:calc(74px + env(safe-area-inset-top,0px));background:rgba(0,0,0,.62);color:#fff;padding:7px 16px;border-radius:20px;font-size:15px;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis}
+.camhint.done{background:#17784a}
+.camres{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));margin:0 auto;max-width:520px;background:var(--surface);color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.camres.okb{border-color:var(--ok)} .camres.warnb{border-color:var(--warn)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="8" fill="var(--accent)"/><circle cx="11" cy="12" r="4" fill="none" stroke="var(--accent-ink)" stroke-width="1.6"/><circle cx="23" cy="12" r="4" fill="var(--accent-ink)"/><circle cx="11" cy="23" r="4" fill="var(--accent-ink)"/><circle cx="23" cy="23" r="4" fill="none" stroke="var(--accent-ink)" stroke-width="1.6"/></svg>
+      <div><h1>ตรวจข้อสอบ</h1><small>กระดาษคำตอบแบบฝน · คณะวิทยาศาสตร์และเทคโนโลยี มรภ.สงขลา</small></div>
+    </div>
+    <div class="hdr-actions"><button id="syncChip" class="chip plain syncchip">Google Sheet</button><button id="installBtn" class="primary" hidden>ติดตั้งแอป</button></div>
+    <div class="exam-pick">
+      <label for="examSel" class="hint">ชุดข้อสอบ</label>
+      <select id="examSel"></select>
+      <button id="newExam">+ ชุดใหม่</button>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="scan" aria-selected="true">สแกน</button>
+    <button role="tab" data-tab="scores">คะแนน <span class="count" id="cntScores">0</span></button>
+    <button role="tab" data-tab="key">เฉลย</button>
+    <button role="tab" data-tab="items">วิเคราะห์ข้อสอบ</button>
+    <button role="tab" data-tab="sheet">กระดาษคำตอบ</button>
+    <button role="tab" data-tab="gs">Google Sheet</button>
+  </nav>
+  <main id="main"></main>
+</div>
+<div id="layer"></div>
+<div id="layer2"></div>
+
+<script>
+/* OMR engine: finds the 4 corner markers, maps the template, reads bubbles.
+   Works on {width, height, data: RGBA Uint8ClampedArray}. No dependencies. */
+(function (root) {
+  'use strict';
+
+  function grayOf(img, mode) {
+    const { width: w, height: h, data } = img;
+    const g = new Float32Array(w * h);
+    for (let i = 0, j = 0; i < g.length; i++, j += 4) {
+      const r = data[j], gg = data[j + 1], b = data[j + 2];
+      g[i] = mode === 'min' ? Math.min(r, gg, b) : 0.299 * r + 0.587 * gg + 0.114 * b;
+    }
+    return { w, h, g };
+  }
+
+  function downscale(G, maxDim) {
+    const s = Math.min(1, maxDim / Math.max(G.w, G.h));
+    if (s === 1) return { w: G.w, h: G.h, g: G.g, s: 1 };
+    const w = Math.max(1, Math.round(G.w * s)), h = Math.max(1, Math.round(G.h * s));
+    const g = new Float32Array(w * h), cnt = new Float32Array(w * h);
+    for (let y = 0; y < G.h; y++) {
+      const ty = Math.min(h - 1, (y * s) | 0);
+      for (let x = 0; x < G.w; x++) {
+        const tx = Math.min(w - 1, (x * s) | 0), k = ty * w + tx;
+        g[k] += G.g[y * G.w + x]; cnt[k]++;
+      }
+    }
+    for (let i = 0; i < g.length; i++) g[i] = cnt[i] ? g[i] / cnt[i] : 255;
+    return { w, h, g, s: w / G.w };
+  }
+
+  function integral(G) {
+    const { w, h, g } = G, I = new Float64Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let row = 0;
+      for (let x = 0; x < w; x++) {
+        row += g[y * w + x];
+        I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row;
+      }
+    }
+    return I;
+  }
+
+  function binarize(G, win, k) {
+    const { w, h, g } = G, I = integral(G), B = new Uint8Array(w * h), r = win >> 1;
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+        const sum = I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0];
+        const mean = sum / ((x1 - x0) * (y1 - y0));
+        B[y * w + x] = g[y * w + x] < mean * k ? 1 : 0;
+      }
+    }
+    return B;
+  }
+
+  function components(B, w, h) {
+    const lab = new Int32Array(w * h), parent = [0];
+    const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+    let next = 1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (!B[i]) continue;
+      const n = [];
+      if (x > 0 && lab[i - 1]) n.push(lab[i - 1]);
+      if (y > 0) {
+        if (lab[i - w]) n.push(lab[i - w]);
+        if (x > 0 && lab[i - w - 1]) n.push(lab[i - w - 1]);
+        if (x < w - 1 && lab[i - w + 1]) n.push(lab[i - w + 1]);
+      }
+      if (!n.length) { parent.push(next); lab[i] = next++; continue; }
+      let m = find(n[0]);
+      for (let t = 1; t < n.length; t++) { const r = find(n[t]); if (r !== m) { if (r < m) { parent[m] = r; m = r; } else parent[r] = m; } }
+      lab[i] = m;
+    }
+    const st = new Map();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (!lab[i]) continue;
+      const r = find(lab[i]);
+      let s = st.get(r);
+      if (!s) { s = { n: 0, sx: 0, sy: 0, sxx: 0, syy: 0, sxy: 0, x0: x, x1: x, y0: y, y1: y }; st.set(r, s); }
+      s.n++; s.sx += x; s.sy += y; s.sxx += x * x; s.syy += y * y; s.sxy += x * y;
+      if (x < s.x0) s.x0 = x; if (x > s.x1) s.x1 = x; if (y < s.y0) s.y0 = y; if (y > s.y1) s.y1 = y;
+    }
+    return [...st.values()];
+  }
+
+  function squareCandidates(comps, maxDim) {
+    const out = [];
+    const amin = Math.pow(maxDim * 0.007, 2), amax = Math.pow(maxDim * 0.09, 2);
+    for (const c of comps) {
+      if (c.n < amin || c.n > amax || c.n < 12) continue;
+      const bw = c.x1 - c.x0 + 1, bh = c.y1 - c.y0 + 1;
+      if (bw / bh > 2.2 || bh / bw > 2.2) continue;
+      const fill = c.n / (bw * bh);
+      if (fill < 0.45) continue;
+      const cx = c.sx / c.n, cy = c.sy / c.n;
+      const m20 = c.sxx / c.n - cx * cx, m02 = c.syy / c.n - cy * cy, m11 = c.sxy / c.n - cx * cy;
+      const J = (m20 + m02) / c.n;              // 1/6 for a filled square, 1/(2pi) for a disk
+      if (J < 0.14 || J > 0.205) continue;
+      const tr = m20 + m02, det = m20 * m02 - m11 * m11, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+      const l1 = tr / 2 + disc, l2 = tr / 2 - disc;
+      if (l2 <= 0 || Math.sqrt(l1 / l2) > 1.6) continue;
+      out.push({ x: cx, y: cy, a: c.n });
+    }
+    return out;
+  }
+
+  // Homography mapping src[i] -> dst[i] (4 points)
+  function homography(src, dst) {
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = src[i], [u, v] = dst[i];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+    }
+    const n = 8;
+    for (let c = 0; c < n; c++) {
+      let p = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+      if (Math.abs(A[p][c]) < 1e-12) return null;
+      [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+      for (let r = 0; r < n; r++) if (r !== c) {
+        const f = A[r][c] / A[c][c];
+        for (let k = c; k < n; k++) A[r][k] -= f * A[c][k];
+        b[r] -= f * b[c];
+      }
+    }
+    const h = b.map((v, i) => v / A[i][i]);
+    return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+  }
+  function apply(H, x, y) {
+    const d = H[6] * x + H[7] * y + H[8];
+    return [(H[0] * x + H[1] * y + H[2]) / d, (H[3] * x + H[4] * y + H[5]) / d];
+  }
+
+  function sample(G, x, y) {
+    const { w, h, g } = G;
+    if (x < 0 || y < 0 || x > w - 1.001 || y > h - 1.001) return 255;
+    const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * w + x0;
+    return g[i] * (1 - fx) * (1 - fy) + g[i + 1] * fx * (1 - fy) + g[i + w] * (1 - fx) * fy + g[i + w + 1] * fx * fy;
+  }
+
+  function percentile(arr, p) {
+    const a = Float32Array.from(arr).sort();
+    return a[Math.min(a.length - 1, Math.max(0, Math.round((a.length - 1) * p)))];
+  }
+
+  // darkness of a disk (mm) relative to the paper just around it
+  function bubbleScore(G, H, cx, cy, r, mmPx) {
+    const step = Math.max(0.12, Math.min(0.3, 0.6 / mmPx));
+    const ri = r * 0.7, ring = [];
+    for (let k = 0; k < 40; k++) {
+      const a = (k / 40) * Math.PI * 2;
+      for (const rr of [r * 1.3, r * 1.45]) {
+        const [x, y] = apply(H, cx + rr * Math.cos(a), cy + rr * Math.sin(a));
+        ring.push(sample(G, x, y));
+      }
+    }
+    const bg = Math.max(60, percentile(ring, 0.85));
+    let sum = 0, n = 0;
+    for (let dy = -ri; dy <= ri; dy += step) for (let dx = -ri; dx <= ri; dx += step) {
+      if (dx * dx + dy * dy > ri * ri) continue;
+      const [x, y] = apply(H, cx + dx, cy + dy);
+      const v = sample(G, x, y);
+      sum += Math.min(1, Math.max(0, (bg - v) / bg)); n++;
+    }
+    return n ? sum / n : 0;
+  }
+
+  function regionDark(G, H, cx, cy, hw, hh) {
+    let sum = 0, n = 0;
+    for (let dy = -hh; dy <= hh; dy += hh / 4) for (let dx = -hw; dx <= hw; dx += hw / 8) {
+      const [x, y] = apply(H, cx + dx, cy + dy); sum += sample(G, x, y); n++;
+    }
+    return sum / n;
+  }
+
+  function locate(img, L) {
+    const lum = grayOf(img, 'lum');
+    const D = downscale(lum, 1000);
+    const maxDim = Math.max(D.w, D.h);
+    let cands = [];
+    for (const k of [0.72, 0.6, 0.82]) {
+      const B = binarize(D, (Math.round(maxDim / 10) | 1), k);
+      cands = squareCandidates(components(B, D.w, D.h), maxDim);
+      const res = pickQuad(cands, D, L);
+      if (res) {
+        const s = D.s;
+        const S = [s, 0, 0, 0, s, 0, 0, 0, 1];
+        // H maps mm -> downscaled px; convert to full-res px
+        const Hf = res.H.map((v, i) => (i < 6 ? v / s : v));
+        return { H: Hf, rot: res.rot, corners: res.corners.map(([x, y]) => [x / s, y / s]), nCand: cands.length };
+      }
+    }
+    return { error: 'markers', nCand: cands.length, cands: cands.slice(0, 12) };
+  }
+
+  // the sheet's fixed print must be where the template says: dark bar and markers, blank paper at known spots
+  function verify(D, H, L) {
+    const [W, Hh] = L.page;
+    const dark = [regionDark(D, H, L.bar[0], L.bar[1], 13, 1.4)].concat(L.fid.map(([x, y]) => regionDark(D, H, x, y, 2, 2)));
+    const paperSpots = [[L.bar[0] - 42, L.bar[1], 6, 1.2], [L.bar[0] + 42, L.bar[1], 6, 1.2], [W / 2 + 10, 18, 6, 1.2],
+      [W / 2, Hh - 8.5, 12, 1.2], [L.fid[0][0] - 1, Hh / 2, 0.8, 30], [L.fid[1][0] + 1, Hh / 2, 0.8, 30]];
+    const paperVals = paperSpots.map(([x, y, hw, hh]) => regionDark(D, H, x, y, hw, hh));
+    const paper = Math.min(...paperVals), dk = Math.max(...dark);
+    return { sc: paper - dk, paper, dark: dk };
+  }
+
+  function pickQuad(cands, D, L) {
+    if (cands.length < 4) return null;
+    cands.sort((a, b) => b.a - a.a);
+    const C = cands.slice(0, 24);
+    const tmplRatio = (L.fidSize * L.fidSize) / ((L.fid[1][0] - L.fid[0][0]) * (L.fid[3][1] - L.fid[0][1]));
+    const combos = [];
+    for (let a = 0; a < C.length; a++) for (let b = a + 1; b < C.length; b++)
+      for (let c = b + 1; c < C.length; c++) for (let d = c + 1; d < C.length; d++) {
+        const q = [C[a], C[b], C[c], C[d]];
+        const areas = q.map((p) => p.a), mx = Math.max(...areas), mn = Math.min(...areas);
+        if (mx / mn > 4) continue;
+        const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4, cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
+        q.sort((p1, p2) => Math.atan2(p1.y - cy, p1.x - cx) - Math.atan2(p2.y - cy, p2.x - cx));
+        let area = 0, convex = true, sign = 0;
+        for (let i = 0; i < 4; i++) {
+          const p = q[i], n1 = q[(i + 1) % 4], n2 = q[(i + 2) % 4];
+          area += p.x * n1.y - n1.x * p.y;
+          const cr = (n1.x - p.x) * (n2.y - n1.y) - (n1.y - p.y) * (n2.x - n1.x);
+          if (sign === 0) sign = Math.sign(cr); else if (Math.sign(cr) !== sign) convex = false;
+        }
+        area = Math.abs(area) / 2;
+        if (!convex || area <= 0) continue;
+        const ratio = (areas.reduce((s, v) => s + v, 0) / 4) / area / tmplRatio;
+        if (ratio < 0.45 || ratio > 2.2) continue;
+        combos.push({ q, area });
+      }
+    combos.sort((a, b) => b.area - a.area);
+    for (const { q } of combos.slice(0, 60)) {
+      const pts = q.map((p) => [p.x, p.y]);
+      let best = null;
+      for (let rot = 0; rot < 4; rot++) {
+        const dst = [0, 1, 2, 3].map((i) => pts[(i + rot) % 4]);
+        const H = homography(L.fid, dst);
+        if (!H) continue;
+        const v = verify(D, H, L);
+        if (!best || v.sc > best.sc) best = Object.assign(v, { H, rot, corners: dst });
+      }
+      if (best && best.sc > 0.3 * best.paper) return best;
+    }
+    return null;
+  }
+
+  function decide(scores, base, T) {
+    const rel = scores.map((s) => s - base);
+    let i1 = -1, i2 = -1;
+    rel.forEach((v, i) => { if (i1 < 0 || v > rel[i1]) { i2 = i1; i1 = i; } else if (i2 < 0 || v > rel[i2]) i2 = i; });
+    const m = rel[i1], m2 = i2 >= 0 ? rel[i2] : -1;
+    if (m < T) return { pick: -1, state: m > T * 0.6 ? 'unsure' : 'blank', rel };
+    if (m2 >= T && m2 >= 0.55 * m) return { pick: -2, state: 'multi', rel, picks: rel.map((v, i) => (v >= T && v >= 0.55 * m ? i : -1)).filter((i) => i >= 0) };
+    const unsure = m < T * 1.5 || m2 > T * 0.7;
+    return { pick: i1, state: unsure ? 'unsure' : 'ok', rel };
+  }
+
+  function read(img, L, opt) {
+    opt = opt || {};
+    const loc = locate(img, L);
+    if (loc.error) return { ok: false, error: loc.error, dbg: loc };
+    const G = grayOf(img, 'min');
+    const H = loc.H;
+    const [ax] = apply(H, 0, 0), [bx] = apply(H, 10, 0);
+    const mmPx = Math.hypot(...(() => { const p = apply(H, 0, 0), q = apply(H, 10, 0); return [q[0] - p[0], q[1] - p[1]]; })()) / 10;
+    const nq = opt.numQ || L.questions.length;
+    const qs = [], all = [];
+    for (let q = 0; q < nq; q++) {
+      const s = L.questions[q].map(([x, y]) => bubbleScore(G, H, x, y, L.qR, mmPx));
+      qs.push(s); all.push(...s);
+    }
+    const ids = L.idCols.map((col) => col.map(([x, y]) => bubbleScore(G, H, x, y, L.idR, mmPx)));
+    ids.forEach((c) => all.push(...c));
+    const base = percentile(all, 0.3);
+    // adaptive threshold: half of the typical mark strength, never below the noise floor
+    const rowMax = qs.concat(ids).map((s) => Math.max(...s) - base);
+    const dev = all.map((v) => Math.abs(v - base));
+    const noiseFloor = percentile(dev, 0.6) * 6;
+    const T = opt.threshold || Math.min(0.09, Math.max(0.025, noiseFloor, 0.45 * percentile(rowMax, 0.5)));
+    const answers = qs.map((s) => decide(s, base, T));
+    const idDec = ids.map((s) => decide(s, base, T));
+    let digits = idDec.map((d) => (d.pick >= 0 ? String(d.pick) : d.state === 'blank' ? ' ' : '?'));
+    let sid = digits.join('').trim();
+    return { ok: true, T, H, mmPx, corners: loc.corners, rot: loc.rot, base, answers, id: { str: sid, cols: idDec } };
+  }
+
+  const api = { read, locate, apply, homography };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.OMR = api;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
+const LAYOUT = {"page": [210, 297], "fid": [[11.5, 11.5], [198.5, 11.5], [198.5, 285.5], [11.5, 285.5]], "fidSize": 7.0, "bar": [105.0, 11.0], "idCols": [[[20.0, 67.0], [20.0, 72.2], [20.0, 77.4], [20.0, 82.6], [20.0, 87.8], [20.0, 93.0], [20.0, 98.2], [20.0, 103.4], [20.0, 108.6], [20.0, 113.8]], [[26.0, 67.0], [26.0, 72.2], [26.0, 77.4], [26.0, 82.6], [26.0, 87.8], [26.0, 93.0], [26.0, 98.2], [26.0, 103.4], [26.0, 108.6], [26.0, 113.8]], [[32.0, 67.0], [32.0, 72.2], [32.0, 77.4], [32.0, 82.6], [32.0, 87.8], [32.0, 93.0], [32.0, 98.2], [32.0, 103.4], [32.0, 108.6], [32.0, 113.8]], [[38.0, 67.0], [38.0, 72.2], [38.0, 77.4], [38.0, 82.6], [38.0, 87.8], [38.0, 93.0], [38.0, 98.2], [38.0, 103.4], [38.0, 108.6], [38.0, 113.8]], [[44.0, 67.0], [44.0, 72.2], [44.0, 77.4], [44.0, 82.6], [44.0, 87.8], [44.0, 93.0], [44.0, 98.2], [44.0, 103.4], [44.0, 108.6], [44.0, 113.8]], [[50.0, 67.0], [50.0, 72.2], [50.0, 77.4], [50.0, 82.6], [50.0, 87.8], [50.0, 93.0], [50.0, 98.2], [50.0, 103.4], [50.0, 108.6], [50.0, 113.8]], [[56.0, 67.0], [56.0, 72.2], [56.0, 77.4], [56.0, 82.6], [56.0, 87.8], [56.0, 93.0], [56.0, 98.2], [56.0, 103.4], [56.0, 108.6], [56.0, 113.8]], [[62.0, 67.0], [62.0, 72.2], [62.0, 77.4], [62.0, 82.6], [62.0, 87.8], [62.0, 93.0], [62.0, 98.2], [62.0, 103.4], [62.0, 108.6], [62.0, 113.8]], [[68.0, 67.0], [68.0, 72.2], [68.0, 77.4], [68.0, 82.6], [68.0, 87.8], [68.0, 93.0], [68.0, 98.2], [68.0, 103.4], [68.0, 108.6], [68.0, 113.8]], [[74.0, 67.0], [74.0, 72.2], [74.0, 77.4], [74.0, 82.6], [74.0, 87.8], [74.0, 93.0], [74.0, 98.2], [74.0, 103.4], [74.0, 108.6], [74.0, 113.8]], [[80.0, 67.0], [80.0, 72.2], [80.0, 77.4], [80.0, 82.6], [80.0, 87.8], [80.0, 93.0], [80.0, 98.2], [80.0, 103.4], [80.0, 108.6], [80.0, 113.8]]], "idR": 2.1, "questions": [[[25.0, 131.0], [31.2, 131.0], [37.4, 131.0], [43.6, 131.0], [49.8, 131.0]], [[25.0, 136.9], [31.2, 136.9], [37.4, 136.9], [43.6, 136.9], [49.8, 136.9]], [[25.0, 142.8], [31.2, 142.8], [37.4, 142.8], [43.6, 142.8], [49.8, 142.8]], [[25.0, 148.7], [31.2, 148.7], [37.4, 148.7], [43.6, 148.7], [49.8, 148.7]], [[25.0, 154.6], [31.2, 154.6], [37.4, 154.6], [43.6, 154.6], [49.8, 154.6]], [[25.0, 160.5], [31.2, 160.5], [37.4, 160.5], [43.6, 160.5], [49.8, 160.5]], [[25.0, 166.4], [31.2, 166.4], [37.4, 166.4], [43.6, 166.4], [49.8, 166.4]], [[25.0, 172.3], [31.2, 172.3], [37.4, 172.3], [43.6, 172.3], [49.8, 172.3]], [[25.0, 178.2], [31.2, 178.2], [37.4, 178.2], [43.6, 178.2], [49.8, 178.2]], [[25.0, 184.1], [31.2, 184.1], [37.4, 184.1], [43.6, 184.1], [49.8, 184.1]], [[25.0, 190.0], [31.2, 190.0], [37.4, 190.0], [43.6, 190.0], [49.8, 190.0]], [[25.0, 195.9], [31.2, 195.9], [37.4, 195.9], [43.6, 195.9], [49.8, 195.9]], [[25.0, 201.8], [31.2, 201.8], [37.4, 201.8], [43.6, 201.8], [49.8, 201.8]], [[25.0, 207.7], [31.2, 207.7], [37.4, 207.7], [43.6, 207.7], [49.8, 207.7]], [[25.0, 213.6], [31.2, 213.6], [37.4, 213.6], [43.6, 213.6], [49.8, 213.6]], [[25.0, 219.5], [31.2, 219.5], [37.4, 219.5], [43.6, 219.5], [49.8, 219.5]], [[25.0, 225.4], [31.2, 225.4], [37.4, 225.4], [43.6, 225.4], [49.8, 225.4]], [[25.0, 231.3], [31.2, 231.3], [37.4, 231.3], [43.6, 231.3], [49.8, 231.3]], [[25.0, 237.2], [31.2, 237.2], [37.4, 237.2], [43.6, 237.2], [49.8, 237.2]], [[25.0, 243.1], [31.2, 243.1], [37.4, 243.1], [43.6, 243.1], [49.8, 243.1]], [[25.0, 249.0], [31.2, 249.0], [37.4, 249.0], [43.6, 249.0], [49.8, 249.0]], [[25.0, 254.9], [31.2, 254.9], [37.4, 254.9], [43.6, 254.9], [49.8, 254.9]], [[25.0, 260.8], [31.2, 260.8], [37.4, 260.8], [43.6, 260.8], [49.8, 260.8]], [[25.0, 266.7], [31.2, 266.7], [37.4, 266.7], [43.6, 266.7], [49.8, 266.7]], [[25.0, 272.6], [31.2, 272.6], [37.4, 272.6], [43.6, 272.6], [49.8, 272.6]], [[71.0, 131.0], [77.2, 131.0], [83.4, 131.0], [89.6, 131.0], [95.8, 131.0]], [[71.0, 136.9], [77.2, 136.9], [83.4, 136.9], [89.6, 136.9], [95.8, 136.9]], [[71.0, 142.8], [77.2, 142.8], [83.4, 142.8], [89.6, 142.8], [95.8, 142.8]], [[71.0, 148.7], [77.2, 148.7], [83.4, 148.7], [89.6, 148.7], [95.8, 148.7]], [[71.0, 154.6], [77.2, 154.6], [83.4, 154.6], [89.6, 154.6], [95.8, 154.6]], [[71.0, 160.5], [77.2, 160.5], [83.4, 160.5], [89.6, 160.5], [95.8, 160.5]], [[71.0, 166.4], [77.2, 166.4], [83.4, 166.4], [89.6, 166.4], [95.8, 166.4]], [[71.0, 172.3], [77.2, 172.3], [83.4, 172.3], [89.6, 172.3], [95.8, 172.3]], [[71.0, 178.2], [77.2, 178.2], [83.4, 178.2], [89.6, 178.2], [95.8, 178.2]], [[71.0, 184.1], [77.2, 184.1], [83.4, 184.1], [89.6, 184.1], [95.8, 184.1]], [[71.0, 190.0], [77.2, 190.0], [83.4, 190.0], [89.6, 190.0], [95.8, 190.0]], [[71.0, 195.9], [77.2, 195.9], [83.4, 195.9], [89.6, 195.9], [95.8, 195.9]], [[71.0, 201.8], [77.2, 201.8], [83.4, 201.8], [89.6, 201.8], [95.8, 201.8]], [[71.0, 207.7], [77.2, 207.7], [83.4, 207.7], [89.6, 207.7], [95.8, 207.7]], [[71.0, 213.6], [77.2, 213.6], [83.4, 213.6], [89.6, 213.6], [95.8, 213.6]], [[71.0, 219.5], [77.2, 219.5], [83.4, 219.5], [89.6, 219.5], [95.8, 219.5]], [[71.0, 225.4], [77.2, 225.4], [83.4, 225.4], [89.6, 225.4], [95.8, 225.4]], [[71.0, 231.3], [77.2, 231.3], [83.4, 231.3], [89.6, 231.3], [95.8, 231.3]], [[71.0, 237.2], [77.2, 237.2], [83.4, 237.2], [89.6, 237.2], [95.8, 237.2]], [[71.0, 243.1], [77.2, 243.1], [83.4, 243.1], [89.6, 243.1], [95.8, 243.1]], [[71.0, 249.0], [77.2, 249.0], [83.4, 249.0], [89.6, 249.0], [95.8, 249.0]], [[71.0, 254.9], [77.2, 254.9], [83.4, 254.9], [89.6, 254.9], [95.8, 254.9]], [[71.0, 260.8], [77.2, 260.8], [83.4, 260.8], [89.6, 260.8], [95.8, 260.8]], [[71.0, 266.7], [77.2, 266.7], [83.4, 266.7], [89.6, 266.7], [95.8, 266.7]], [[71.0, 272.6], [77.2, 272.6], [83.4, 272.6], [89.6, 272.6], [95.8, 272.6]], [[117.0, 131.0], [123.2, 131.0], [129.4, 131.0], [135.6, 131.0], [141.8, 131.0]], [[117.0, 136.9], [123.2, 136.9], [129.4, 136.9], [135.6, 136.9], [141.8, 136.9]], [[117.0, 142.8], [123.2, 142.8], [129.4, 142.8], [135.6, 142.8], [141.8, 142.8]], [[117.0, 148.7], [123.2, 148.7], [129.4, 148.7], [135.6, 148.7], [141.8, 148.7]], [[117.0, 154.6], [123.2, 154.6], [129.4, 154.6], [135.6, 154.6], [141.8, 154.6]], [[117.0, 160.5], [123.2, 160.5], [129.4, 160.5], [135.6, 160.5], [141.8, 160.5]], [[117.0, 166.4], [123.2, 166.4], [129.4, 166.4], [135.6, 166.4], [141.8, 166.4]], [[117.0, 172.3], [123.2, 172.3], [129.4, 172.3], [135.6, 172.3], [141.8, 172.3]], [[117.0, 178.2], [123.2, 178.2], [129.4, 178.2], [135.6, 178.2], [141.8, 178.2]], [[117.0, 184.1], [123.2, 184.1], [129.4, 184.1], [135.6, 184.1], [141.8, 184.1]], [[117.0, 190.0], [123.2, 190.0], [129.4, 190.0], [135.6, 190.0], [141.8, 190.0]], [[117.0, 195.9], [123.2, 195.9], [129.4, 195.9], [135.6, 195.9], [141.8, 195.9]], [[117.0, 201.8], [123.2, 201.8], [129.4, 201.8], [135.6, 201.8], [141.8, 201.8]], [[117.0, 207.7], [123.2, 207.7], [129.4, 207.7], [135.6, 207.7], [141.8, 207.7]], [[117.0, 213.6], [123.2, 213.6], [129.4, 213.6], [135.6, 213.6], [141.8, 213.6]], [[117.0, 219.5], [123.2, 219.5], [129.4, 219.5], [135.6, 219.5], [141.8, 219.5]], [[117.0, 225.4], [123.2, 225.4], [129.4, 225.4], [135.6, 225.4], [141.8, 225.4]], [[117.0, 231.3], [123.2, 231.3], [129.4, 231.3], [135.6, 231.3], [141.8, 231.3]], [[117.0, 237.2], [123.2, 237.2], [129.4, 237.2], [135.6, 237.2], [141.8, 237.2]], [[117.0, 243.1], [123.2, 243.1], [129.4, 243.1], [135.6, 243.1], [141.8, 243.1]], [[117.0, 249.0], [123.2, 249.0], [129.4, 249.0], [135.6, 249.0], [141.8, 249.0]], [[117.0, 254.9], [123.2, 254.9], [129.4, 254.9], [135.6, 254.9], [141.8, 254.9]], [[117.0, 260.8], [123.2, 260.8], [129.4, 260.8], [135.6, 260.8], [141.8, 260.8]], [[117.0, 266.7], [123.2, 266.7], [129.4, 266.7], [135.6, 266.7], [141.8, 266.7]], [[117.0, 272.6], [123.2, 272.6], [129.4, 272.6], [135.6, 272.6], [141.8, 272.6]], [[163.0, 131.0], [169.2, 131.0], [175.4, 131.0], [181.6, 131.0], [187.8, 131.0]], [[163.0, 136.9], [169.2, 136.9], [175.4, 136.9], [181.6, 136.9], [187.8, 136.9]], [[163.0, 142.8], [169.2, 142.8], [175.4, 142.8], [181.6, 142.8], [187.8, 142.8]], [[163.0, 148.7], [169.2, 148.7], [175.4, 148.7], [181.6, 148.7], [187.8, 148.7]], [[163.0, 154.6], [169.2, 154.6], [175.4, 154.6], [181.6, 154.6], [187.8, 154.6]], [[163.0, 160.5], [169.2, 160.5], [175.4, 160.5], [181.6, 160.5], [187.8, 160.5]], [[163.0, 166.4], [169.2, 166.4], [175.4, 166.4], [181.6, 166.4], [187.8, 166.4]], [[163.0, 172.3], [169.2, 172.3], [175.4, 172.3], [181.6, 172.3], [187.8, 172.3]], [[163.0, 178.2], [169.2, 178.2], [175.4, 178.2], [181.6, 178.2], [187.8, 178.2]], [[163.0, 184.1], [169.2, 184.1], [175.4, 184.1], [181.6, 184.1], [187.8, 184.1]], [[163.0, 190.0], [169.2, 190.0], [175.4, 190.0], [181.6, 190.0], [187.8, 190.0]], [[163.0, 195.9], [169.2, 195.9], [175.4, 195.9], [181.6, 195.9], [187.8, 195.9]], [[163.0, 201.8], [169.2, 201.8], [175.4, 201.8], [181.6, 201.8], [187.8, 201.8]], [[163.0, 207.7], [169.2, 207.7], [175.4, 207.7], [181.6, 207.7], [187.8, 207.7]], [[163.0, 213.6], [169.2, 213.6], [175.4, 213.6], [181.6, 213.6], [187.8, 213.6]], [[163.0, 219.5], [169.2, 219.5], [175.4, 219.5], [181.6, 219.5], [187.8, 219.5]], [[163.0, 225.4], [169.2, 225.4], [175.4, 225.4], [181.6, 225.4], [187.8, 225.4]], [[163.0, 231.3], [169.2, 231.3], [175.4, 231.3], [181.6, 231.3], [187.8, 231.3]], [[163.0, 237.2], [169.2, 237.2], [175.4, 237.2], [181.6, 237.2], [187.8, 237.2]], [[163.0, 243.1], [169.2, 243.1], [175.4, 243.1], [181.6, 243.1], [187.8, 243.1]], [[163.0, 249.0], [169.2, 249.0], [175.4, 249.0], [181.6, 249.0], [187.8, 249.0]], [[163.0, 254.9], [169.2, 254.9], [175.4, 254.9], [181.6, 254.9], [187.8, 254.9]], [[163.0, 260.8], [169.2, 260.8], [175.4, 260.8], [181.6, 260.8], [187.8, 260.8]], [[163.0, 266.7], [169.2, 266.7], [175.4, 266.7], [181.6, 266.7], [187.8, 266.7]], [[163.0, 272.6], [169.2, 272.6], [175.4, 272.6], [181.6, 272.6], [187.8, 272.6]]], "qR": 2.1};
+const TH = ['ก','ข','ค','ง','จ'];
+const LET = 'ABCDE';
+const GS_CODE = "/**\n * ตรวจข้อสอบ OMR → Google Sheet\n * วางโค้ดนี้ใน ส่วนขยาย > Apps Script ของ Google Sheet ที่จะเก็บคะแนน\n * แล้วทำให้ใช้งานได้เป็น \"เว็บแอป\" (สิทธิ์เข้าถึง: ทุกคน)\n * ห้ามแก้ TOKEN ถ้าไม่ได้แก้ในแอปด้วย\n */\nconst TOKEN = '__TOKEN__';\n\nconst FIXED = ['รหัสนักศึกษา', 'คะแนน', 'คะแนนเต็ม', 'ร้อยละ', 'ต้องตรวจ (จุด)', 'เวลาสแกน', 'รหัสอ้างอิง'];\nconst UID_COL = 7;          // column G holds the app's record id\nconst FIRST_ROW = 3;        // row 1 header, row 2 answer key\n\nfunction doGet() {\n  return out_({ ok: true, app: 'omr-skru', sheet: SpreadsheetApp.getActiveSpreadsheet().getName() });\n}\n\nfunction doPost(e) {\n  let body;\n  try { body = JSON.parse(e.postData.contents); } catch (err) { return out_({ ok: false, error: 'bad_json' }); }\n  if (!body || body.token !== TOKEN) return out_({ ok: false, error: 'token' });\n  const lock = LockService.getScriptLock();\n  lock.waitLock(25000);\n  try {\n    if (body.action === 'ping') return out_({ ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });\n    if (body.action === 'sync') return out_(sync_(body));\n    return out_({ ok: false, error: 'action' });\n  } catch (err) {\n    return out_({ ok: false, error: String(err && err.message || err) });\n  } finally {\n    lock.releaseLock();\n  }\n}\n\nfunction sync_(body) {\n  const ex = body.exam;\n  const sh = sheetFor_(ex);\n  const n = Math.max(1, Math.min(100, ex.numQ | 0));\n  const width = FIXED.length + n;\n\n  // header + key rows\n  const head = FIXED.concat(Array.from({ length: n }, (_, i) => 'ข้อ ' + (i + 1)));\n  const keyRow = ['เฉลย', '', '', '', '', '', ''].concat(ex.keyTh.slice(0, n));\n  while (keyRow.length < width) keyRow.push('');\n  sh.getRange(1, 1, 2, width).setValues([head, keyRow]);\n  const lastCol = sh.getLastColumn();\n  if (lastCol > width) sh.getRange(1, width + 1, Math.max(1, sh.getLastRow()), lastCol - width).clearContent();\n  sh.getRange(1, 1, 2, width).setFontWeight('bold');\n  sh.getRange('A:A').setNumberFormat('@');\n  sh.getRange(1, UID_COL, Math.max(2, sh.getLastRow()), 1).setFontColor('#999999');\n  if (sh.getFrozenRows() !== 2) sh.setFrozenRows(2);\n\n  // existing rows by record id\n  const index = () => {\n    const last = sh.getLastRow(), map = {};\n    if (last >= FIRST_ROW) {\n      const ids = sh.getRange(FIRST_ROW, UID_COL, last - FIRST_ROW + 1, 1).getValues();\n      ids.forEach((r, i) => { if (r[0]) map[String(r[0])] = FIRST_ROW + i; });\n    }\n    return map;\n  };\n\n  // deletions, bottom-up so row numbers stay valid\n  let map = index();\n  const del = (body.deletes || []).map((u) => map[u]).filter(Boolean).sort((a, b) => b - a);\n  del.forEach((r) => sh.deleteRow(r));\n  if (del.length) map = index();\n\n  const appends = [], synced = [];\n  (body.rows || []).forEach((r) => {\n    const row = [String(r.sid || ''), r.score, r.total, r.pct, r.flags || '', r.at ? new Date(r.at) : '', r.uid]\n      .concat((r.ansTh || []).slice(0, n));\n    while (row.length < width) row.push('');\n    const at = map[r.uid];\n    if (at) sh.getRange(at, 1, 1, width).setValues([row]);\n    else appends.push(row);\n    synced.push(r.uid);\n  });\n  if (appends.length) {\n    const start = Math.max(sh.getLastRow() + 1, FIRST_ROW);\n    sh.getRange(start, 1, appends.length, width).setValues(appends);\n  }\n  const last = sh.getLastRow();\n  if (last > FIRST_ROW) sh.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, width).sort(1);\n  if (last >= FIRST_ROW) sh.getRange(FIRST_ROW, 6, last - FIRST_ROW + 1, 1).setNumberFormat('d/m/yyyy HH:mm');\n\n  return { ok: true, synced: synced, deleted: body.deletes || [], tab: sh.getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() + '#gid=' + sh.getSheetId() };\n}\n\nfunction sheetFor_(ex) {\n  const ss = SpreadsheetApp.getActiveSpreadsheet();\n  const want = safeName_(ex.name || 'ชุดข้อสอบ');\n  let sh = ss.getSheets().filter((s) => s.getRange('A1').getNote() === ex.id)[0];\n  if (!sh) {\n    let name = want, i = 2;\n    while (ss.getSheetByName(name)) name = want + ' (' + (i++) + ')';\n    sh = ss.insertSheet(name);\n    sh.getRange('A1').setNote(ex.id);\n  } else if (sh.getName() !== want && !ss.getSheetByName(want)) {\n    sh.setName(want);\n  }\n  return sh;\n}\n\nfunction safeName_(s) {\n  return String(s).replace(/[\\[\\]\\*\\?\\/\\\\:]/g, ' ').trim().slice(0, 90) || 'ชุดข้อสอบ';\n}\n\nfunction out_(o) {\n  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);\n}\n";
+const APP_VERSION = '1.0.0';
+const SEED = {name:'GESC401 Final 1/2569', numQ:60, key:'BEADEDBECACBCBDABDCBECAEAEDDADAAADBCEDABBADCEECECDBEDACDEEBA'};
+
+/* ---------- storage: this device (Google Sheet keeps the shared copy) ---------- */
+const Store = {
+  mode:'local',
+  async init(){ try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch(e){} },
+  localAll(){ try{ return JSON.parse(localStorage.getItem('omr-exams')||'[]'); }catch(e){ return []; } },
+  localPut(list){ try{ localStorage.setItem('omr-exams', JSON.stringify(list)); }catch(e){ toast('พื้นที่เก็บข้อมูลในเครื่องเต็ม'); } },
+  async list(){ return this.localAll(); },
+  async save(ex){ ex.updatedAt=Date.now(); const l=this.localAll().filter(x=>x.id!==ex.id); l.push(JSON.parse(JSON.stringify(ex))); this.localPut(l); return true; },
+  async remove(id){ this.localPut(this.localAll().filter(x=>x.id!==id)); }
+};
+
+/* ---------- state ---------- */
+const S = { exams:[], cur:null, tab:'scan', session:[], images:{}, busy:false, prog:0, progText:'', pending:null };
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const exam = ()=> S.exams.find(e=>e.id===S.cur);
+function newId(){ return 'exam_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2800); }
+
+function scoreOf(ex, ans){ let s=0; for(let i=0;i<ex.numQ;i++){ if(ex.key[i] && ex.key[i]!=='-' && ans[i]===ex.key[i]) s++; } return s; }
+function keyCount(ex){ let n=0; for(let i=0;i<ex.numQ;i++) if(ex.key[i] && 'ABCDE'.includes(ex.key[i])) n++; return n; }
+function thAns(c){ const i=LET.indexOf(c); return i>=0?TH[i]:(c==='*'?'หลายข้อ':'–'); }
+
+async function persist(){ const ex=exam(); if(ex) await Store.save(ex); scheduleSync(); }
+
+/* ---------- boot ---------- */
+async function boot(){
+  render();
+  await Store.init();
+  S.exams = await Store.list();
+  if(!S.exams.length){
+    const ex = {id:newId(), name:SEED.name, numQ:SEED.numQ, key:SEED.key, results:[], createdAt:Date.now()};
+    S.exams=[ex]; await Store.save(ex);
+  }
+  S.exams.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  let last=null; try{ last=localStorage.getItem('omr-cur'); }catch(e){}
+  S.cur = (S.exams.find(e=>e.id===last)||S.exams[0]).id;
+  render(); scheduleSync(2500);
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  const sel=$('#examSel');
+  sel.innerHTML = S.exams.map(e=>`<option value="${e.id}" ${e.id===S.cur?'selected':''}>${esc(e.name)}</option>`).join('') || '<option>กำลังโหลด…</option>';
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===S.tab)));
+  const ex=exam();
+  $('#cntScores').textContent = ex? ex.results.length : 0;
+  updateSyncChip();
+  const m=$('#main');
+  if(!ex){ m.innerHTML='<section class="panel"><div class="card empty">กำลังโหลดข้อมูล…</div></section>'; return; }
+  m.innerHTML = '<section class="panel">'+({scan:viewScan,scores:viewScores,key:viewKey,items:viewItems,sheet:viewSheet,gs:viewGs}[S.tab])(ex)+'</section>';
+  bindView(ex);
+}
+
+function viewScan(ex){
+  const kc=keyCount(ex);
+  const warn = kc<ex.numQ ? `<div class="card" style="border-color:var(--warn)"><b style="color:var(--warn)">เฉลยยังไม่ครบ</b> <span class="hint">กรอกแล้ว ${kc} จาก ${ex.numQ} ข้อ ตรวจได้ แต่ข้อที่ไม่มีเฉลยจะไม่นับคะแนน</span> <button data-go="key">ไปที่เฉลย</button></div>`:'';
+  const rows = S.session.filter(r=>r.exam===ex.id);
+  const list = rows.length ? `<div class="tablebox"><table><thead><tr><th>ไฟล์</th><th>รหัสนักศึกษา</th><th class="num">คะแนน</th><th>สถานะ</th></tr></thead><tbody>${
+    rows.slice().reverse().map(r=>{
+      if(r.error) return `<tr><td>${esc(r.src)}</td><td colspan="2" class="hint">${esc(r.error)}</td><td><span class="chip bad">อ่านไม่ได้</span></td></tr>`;
+      const res = ex.results.find(x=>x.uid===r.uid);
+      if(!res) return '';
+      const fl = flagsOf(res);
+      return `<tr class="click" data-review="${res.uid}"><td>${esc(r.src)}</td><td class="mono">${esc(res.sid||'—')}</td><td class="num">${scoreOf(ex,res.ans)}/${kc}</td><td>${fl? `<span class="chip warn">ต้องตรวจ ${fl} จุด</span>`:`<span class="chip ok">เรียบร้อย</span>`}${r.replaced?' <span class="chip plain">แทนผลเดิม</span>':''}</td></tr>`;
+    }).join('')}</tbody></table></div>` : '';
+  // newest sheet first, shown big so a phone user sees each score right after the shot
+  const lastE = rows.length ? rows[rows.length-1] : null;
+  const lastR = lastE && !lastE.error ? ex.results.find(x=>x.uid===lastE.uid) : null;
+  let latest='';
+  if(lastE && !S.busy){
+    if(lastR){ const f=flagsOf(lastR), s=scoreOf(ex,lastR.ans);
+      latest=`<div class="card latest ${f?'warnb':'okb'}">
+        <div class="latest-main"><div><span class="hint">แผ่นล่าสุด · ${esc(lastE.src)}</span>
+          <div class="latest-score mono">${s}<small>/${kc}</small></div>
+          <div class="mono">${esc(lastR.sid||'อ่านรหัสไม่ได้')}</div></div>
+          <div>${f?`<span class="chip warn">ต้องตรวจ ${f} จุด</span>`:'<span class="chip ok">เรียบร้อย</span>'}${lastE.replaced?' <span class="chip plain">แทนผลเดิม</span>':''}</div></div>
+        <div class="row">${CAN_LIVE?'<button class="primary big" data-live>สแกนแผ่นถัดไป</button>':'<label class="btn primary big" for="camPick">ถ่ายแผ่นถัดไป</label>'}<button class="big" data-review="${lastR.uid}">${f?'ดูข้อที่ต้องตรวจ':'ดูภาพและคำตอบ'}</button></div></div>`;
+    } else {
+      latest=`<div class="card latest badb"><b style="color:var(--bad)">อ่านแผ่นล่าสุดไม่ได้</b><p class="hint">${esc(lastE.error)}</p>
+        <div class="row" style="margin-top:10px">${CAN_LIVE?'<button class="primary big" data-live>สแกนใหม่</button>':'<label class="btn primary big" for="camPick">ถ่ายใหม่</label>'}</div></div>`;
+    }
+  }
+  return `${installBanner()}${warn}${latest}
+  <div class="card" style="padding:0;border:0;background:transparent">
+    <div class="drop" id="drop">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="4" width="26" height="32" rx="3" fill="none" stroke="var(--accent)" stroke-width="2"/><rect x="10" y="7" width="3.5" height="3.5" fill="var(--accent)"/><rect x="26.5" y="7" width="3.5" height="3.5" fill="var(--accent)"/><rect x="10" y="29.5" width="3.5" height="3.5" fill="var(--accent)"/><rect x="26.5" y="29.5" width="3.5" height="3.5" fill="var(--accent)"/><path d="M14 20h12M20 14v12" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>
+      <div><b>${CAN_LIVE?'ส่องกล้องที่กระดาษ แอปจะตรวจให้เองทันที':'ถ่ายรูปกระดาษคำตอบทีละแผ่น'} หรือเลือกไฟล์หลายไฟล์พร้อมกัน</b><p class="hint">บนคอมพิวเตอร์ลากไฟล์มาวางที่นี่ได้ · PDF จากเครื่องสแกน หนึ่งหน้าต่อหนึ่งคน</p></div>
+      <div class="row" style="justify-content:center">
+        ${CAN_LIVE?'<button class="primary big" data-live>สแกนด้วยกล้อง</button><label class="btn big" for="camPick">ถ่ายรูป</label>':'<label class="btn primary big" for="camPick">ถ่ายรูป</label>'}
+        <label class="btn big" for="filePick">เลือกรูปหรือ PDF</label>
+      </div>
+      <input type="file" id="filePick" accept="image/*,application/pdf" multiple>
+      <input type="file" id="camPick" accept="image/*" capture="environment">
+      ${S.busy?`<div class="progress"><i style="width:${S.prog}%"></i></div><p class="hint">${esc(S.progText)}</p>`:''}
+    </div>
+  </div>
+  ${rows.length?`<div class="row"><h3 style="margin:0">สแกนในรอบนี้ ${rows.length} แผ่น</h3><span class="hint">แตะแถวเพื่อดูภาพและแก้ข้อที่ระบบไม่แน่ใจ</span></div>${list}`:
+  `<div class="card"><h3>วิธีถ่ายให้อ่านได้แม่น</h3><ol class="tips hint">
+    <li>วางกระดาษบนโต๊ะ ส่องกล้องให้กระดาษเกือบเต็มจอ เห็นสี่เหลี่ยมดำครบทั้ง 4 มุม แล้วถือนิ่ง ๆ ครู่เดียว</li>
+    <li>ระวังเงามือหรือเงาโทรศัพท์ทับวงกลม ถ้าห้องมืดกดปุ่มไฟฉายในหน้ากล้อง</li><li>เมื่อได้ยินเสียงและเห็นคะแนน เปลี่ยนแผ่นถัดไปได้เลย ไม่ต้องกดอะไร</li>
+    <li>ถ้ามีหลายสิบแผ่น ใช้เครื่องถ่ายเอกสารสแกนเป็น PDF ไฟล์เดียวจะเร็วที่สุด (150–300 dpi ขาวดำหรือสีเทา)</li>
+  </ol></div>`}`;
+}
+
+function flagsOf(r){ return (r.flags||[]).length + (/^\d+$/.test(r.sid||'')?0:1); }
+
+function stats(arr){
+  const n=arr.length; if(!n) return null;
+  const s=[...arr].sort((a,b)=>a-b), mean=arr.reduce((a,b)=>a+b,0)/n;
+  const sd=Math.sqrt(arr.reduce((a,b)=>a+(b-mean)**2,0)/(n>1?n-1:1));
+  const med = n%2? s[(n-1)/2] : (s[n/2-1]+s[n/2])/2;
+  return {n,mean,sd,med,min:s[0],max:s[n-1]};
+}
+
+function viewScores(ex){
+  const kc=keyCount(ex);
+  if(!ex.results.length) return `<div class="card empty">ยังไม่มีคะแนนในชุดนี้ <button data-go="scan" class="primary" style="margin-left:8px">ไปสแกน</button></div>`;
+  const rs=[...ex.results].sort((a,b)=>String(a.sid).localeCompare(String(b.sid)));
+  const sc=rs.map(r=>scoreOf(ex,r.ans)); const st=stats(sc);
+  const need=rs.filter(r=>flagsOf(r)).length;
+  const bins=Math.min(kc||1,20), hist=new Array(bins).fill(0);
+  sc.forEach(v=>{ hist[Math.min(bins-1,Math.floor(v/(kc||1)*bins))]++; });
+  const hm=Math.max(...hist,1);
+  return `<div class="stats">
+    <div class="stat"><b>${st.n}</b><span>จำนวนผู้สอบ</span></div>
+    <div class="stat"><b>${st.mean.toFixed(2)}</b><span>ค่าเฉลี่ย (เต็ม ${kc})</span></div>
+    <div class="stat"><b>${st.sd.toFixed(2)}</b><span>ส่วนเบี่ยงเบนมาตรฐาน</span></div>
+    <div class="stat"><b>${st.med}</b><span>มัธยฐาน</span></div>
+    <div class="stat"><b>${st.max} / ${st.min}</b><span>สูงสุด / ต่ำสุด</span></div>
+  </div>
+  <div class="card"><div class="row"><h3 style="margin:0">การกระจายของคะแนน</h3></div>
+    <div class="hist">${hist.map((h,i)=>`<div title="${Math.round(i*kc/bins)}–${Math.round((i+1)*kc/bins)} คะแนน: ${h} คน" style="height:${h/hm*100}%"></div>`).join('')}</div>
+    <div class="histax"><span>0</span><span>${Math.round(kc/2)}</span><span>${kc}</span></div></div>
+  <div class="row">
+    ${need?`<span class="chip warn">มี ${need} แผ่นที่ต้องตรวจซ้ำ</span>`:`<span class="chip ok">ตรวจครบทุกแผ่น</span>`}
+    <span class="grow"></span>
+    <button id="dlCsv" class="primary">ดาวน์โหลด Excel (CSV)</button>
+    <button id="cpTsv">คัดลอกตารางไปวาง Excel</button>
+  </div>
+  <div class="tablebox"><table><thead><tr><th>#</th><th>รหัสนักศึกษา</th><th class="num">คะแนน</th><th class="num">ร้อยละ</th><th>สถานะ</th><th>ที่มา</th></tr></thead><tbody>
+  ${rs.map((r,i)=>{ const s=scoreOf(ex,r.ans), f=flagsOf(r); return `<tr class="click" data-review="${r.uid}"><td class="num">${i+1}</td><td class="mono">${esc(r.sid||'—')}</td><td class="num">${s}</td><td class="num">${kc?(s/kc*100).toFixed(1):'–'}</td><td>${f?`<span class="chip warn">ต้องตรวจ ${f}</span>`:r.edited?'<span class="chip plain">แก้ไขแล้ว</span>':'<span class="chip ok">เรียบร้อย</span>'}</td><td class="hint">${esc(r.src||'')}</td></tr>`; }).join('')}
+  </tbody></table></div>
+  <div class="row"><span class="grow"></span>${S.pending==='clear'?`<span class="confirm">ลบคะแนนทั้งหมด ${rs.length} คนในชุดนี้? <button class="danger" id="clearYes">ลบทั้งหมด</button><button id="clearNo">ยกเลิก</button></span>`:`<button class="ghost danger" id="clearAll">ลบคะแนนทั้งหมดในชุดนี้</button>`}</div>`;
+}
+
+function viewKey(ex){
+  const kc=keyCount(ex);
+  let grid='';
+  for(let q=0;q<ex.numQ;q++){
+    const k=ex.key[q]||'-';
+    grid+=`<div class="krow ${'ABCDE'.includes(k)?'':'missing'}"><span class="n">${q+1}</span>${TH.map((t,i)=>`<button class="bub ${k===LET[i]?'on':''}" data-k="${q}:${i}" aria-label="ข้อ ${q+1} ตอบ ${t}">${t}</button>`).join('')}</div>`;
+  }
+  return `<div class="card"><div class="row">
+      <div class="grow"><label class="hint" for="exName">ชื่อชุดข้อสอบ</label><input type="text" id="exName" value="${esc(ex.name)}" style="width:100%"></div>
+      <div><label class="hint" for="exN">จำนวนข้อ</label><input type="number" id="exN" min="1" max="100" value="${ex.numQ}" style="width:96px;display:block"></div>
+    </div></div>
+  <div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">เฉลย</h2><span class="chip ${kc===ex.numQ?'ok':'warn'}">${kc}/${ex.numQ} ข้อ</span><span class="grow"></span>
+      <label class="btn" for="keyPick">อ่านเฉลยจากกระดาษคำตอบ</label><input type="file" id="keyPick" accept="image/*,application/pdf" hidden>
+    </div>
+    <p class="hint" style="margin-bottom:12px">แตะวงกลมเพื่อเลือกคำตอบที่ถูก แตะซ้ำเพื่อลบ หรือฝนเฉลยลงกระดาษคำตอบแล้วให้แอปอ่าน เมื่อแก้เฉลย คะแนนทุกคนคำนวณใหม่ทันที</p>
+    <div class="keygrid">${grid}</div>
+  </div>
+  <div class="card"><h3>วางเฉลยแบบตัวอักษร</h3><p class="hint">ใช้ได้ทั้ง ก–จ, A–E หรือ 1–5 เรียงต่อกัน เช่น ขจกงจงขจคก…</p>
+    <div class="row" style="margin-top:8px"><input type="text" id="keyText" class="grow" placeholder="ขจกงจ…"><button id="keyApply">ใช้เฉลยนี้</button></div></div>
+  <div class="row"><span class="grow"></span>${S.pending==='delExam'?`<span class="confirm">ลบชุด “${esc(ex.name)}” พร้อมคะแนนทั้งหมด? <button class="danger" id="delYes">ลบชุดนี้</button><button id="delNo">ยกเลิก</button></span>`:`<button class="ghost danger" id="delExam">ลบชุดข้อสอบนี้</button>`}</div>`;
+}
+
+function itemAnalysis(ex){
+  const rs=ex.results; const n=rs.length; if(!n) return null;
+  const sc=rs.map(r=>scoreOf(ex,r.ans));
+  const order=rs.map((r,i)=>i).sort((a,b)=>sc[b]-sc[a]);
+  const g=Math.max(1,Math.round(n*0.27));
+  const hi=order.slice(0,g), lo=order.slice(-g);
+  const out=[];
+  for(let q=0;q<ex.numQ;q++){
+    const k=ex.key[q]; const cnt=[0,0,0,0,0,0]; // A-E, blank/multi
+    rs.forEach(r=>{ const i=LET.indexOf(r.ans[q]); cnt[i>=0?i:5]++; });
+    const valid='ABCDE'.includes(k);
+    const p= valid? cnt[LET.indexOf(k)]/n : null;
+    const rr= valid? (hi.filter(i=>rs[i].ans[q]===k).length - lo.filter(i=>rs[i].ans[q]===k).length)/g : null;
+    const deadD = valid? LET.split('').filter((c,i)=>c!==k && cnt[i]/n<0.05).length : 0;
+    out.push({q,k,cnt,p,r:rr,deadD});
+  }
+  return {n,g,items:out};
+}
+
+function viewItems(ex){
+  const A=itemAnalysis(ex);
+  if(!A) return `<div class="card empty">สแกนกระดาษคำตอบก่อน แล้วผลวิเคราะห์รายข้อจะแสดงที่นี่</div>`;
+  const cols=['var(--accent)','#3f8f8a','#8a6fb8','#c07a3a','#6d7f99'];
+  const pTag=p=> p===null?'<span class="chip plain">ไม่มีเฉลย</span>': p<0.2?'<span class="chip bad">ยากมาก</span>':p>0.8?'<span class="chip warn">ง่ายมาก</span>':'<span class="chip ok">เหมาะสม</span>';
+  const rTag=r=> r===null?'': r<0?'<span class="chip bad">ติดลบ ตรวจเฉลย</span>': r<0.2?'<span class="chip warn">ควรปรับปรุง</span>':'<span class="chip ok">ใช้ได้</span>';
+  const good=A.items.filter(i=>i.p!==null&&i.p>=0.2&&i.p<=0.8&&i.r>=0.2).length;
+  return `<div class="card"><h2>วิเคราะห์ข้อสอบรายข้อ</h2><p class="hint">ผู้สอบ ${A.n} คน · กลุ่มสูงและกลุ่มต่ำกลุ่มละ ${A.g} คน (27%) · ข้อที่ใช้ได้ดีทั้งความยากและอำนาจจำแนก ${good} ข้อ${A.n<20?' · <b style="color:var(--warn)">ผู้สอบน้อยกว่า 20 คน ค่าที่ได้อาจคลาดเคลื่อน</b>':''}</p>
+    <p class="hint">ความยาก p: 0.20–0.80 เหมาะสม · อำนาจจำแนก r: ตั้งแต่ 0.20 ใช้ได้ · ตัวลวงที่มีคนเลือกน้อยกว่า 5% ถือว่าไม่ทำงาน</p></div>
+  <div class="row"><span class="grow"></span><button id="dlItems">ดาวน์โหลดผลวิเคราะห์ (CSV)</button></div>
+  <div class="tablebox"><table><thead><tr><th class="num">ข้อ</th><th>เฉลย</th><th class="num">p</th><th>ความยาก</th><th class="num">r</th><th>อำนาจจำแนก</th><th>ตัวเลือกที่ผู้สอบตอบ (ก ข ค ง จ)</th><th class="num">ตัวลวงไม่ทำงาน</th></tr></thead><tbody>
+  ${A.items.map(it=>`<tr><td class="num">${it.q+1}</td><td>${thAns(it.k)}</td><td class="num">${it.p===null?'–':it.p.toFixed(2)}</td><td>${pTag(it.p)}</td><td class="num">${it.r===null?'–':it.r.toFixed(2)}</td><td>${rTag(it.r)}</td>
+    <td><div class="choicebar" title="${TH.map((t,i)=>t+' '+it.cnt[i]).join(' · ')} · ไม่ตอบ/หลายข้อ ${it.cnt[5]}">${it.cnt.slice(0,5).map((c,i)=>`<i style="width:${c/A.n*100}%;background:${cols[i]};${LET[i]===it.k?'outline:2px solid var(--ok);outline-offset:-2px':''};opacity:${LET[i]===it.k?1:.55}"></i>`).join('')}</div>
+    <span class="hint mono" style="font-size:12px">${it.cnt.slice(0,5).join(' · ')}${it.cnt[5]?' · ว่าง '+it.cnt[5]:''}</span></td>
+    <td class="num">${it.deadD||''}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+function viewSheet(){
+  return `<div class="card"><div class="two">
+    <img class="sheetprev" src="answer-sheet.png" alt="ตัวอย่างกระดาษคำตอบ 100 ข้อ พร้อมสี่เหลี่ยมดำที่มุม">
+    <div>
+      <h2>กระดาษคำตอบ 100 ข้อ ก–จ</h2>
+      <p class="hint">รหัสนักศึกษา 11 หลัก ใช้ได้กับทุกวิชา ถ้าข้อสอบมีน้อยกว่า 100 ข้อ ให้นักศึกษาตอบเฉพาะข้อที่มี</p>
+      <div class="row" style="margin:14px 0"><button class="primary" id="dlSheet">ดาวน์โหลด PDF สำหรับพิมพ์</button></div>
+      <h3>การพิมพ์</h3>
+      <ol class="tips hint">
+        <li>พิมพ์ขนาด A4 ตั้งค่า “ขนาดจริง (100%)” จะพิมพ์ขาวดำหรือถ่ายเอกสารต่อก็ได้</li>
+        <li>สี่เหลี่ยมดำ 4 มุมและแถบดำด้านบนต้องคมชัด เป็นจุดที่แอปใช้หาตำแหน่งกระดาษ</li>
+      </ol>
+      <h3 style="margin-top:14px">ชี้แจงนักศึกษา</h3>
+      <ol class="tips hint">
+        <li>ใช้ปากกาหรือดินสอ กากบาท ✕ หรือระบายทึบในวงกลม ข้อละ 1 คำตอบ</li>
+        <li>ฝนรหัสนักศึกษาให้ครบ 11 หลัก</li>
+        <li>ถ้าจะเปลี่ยนคำตอบ ใช้เทปลบคำผิดปิดวงเดิมให้สะอาด ถ้ายังเห็นรอย แอปจะขึ้นเตือนว่า “ตอบหลายข้อ” ให้อาจารย์ตัดสิน</li>
+      </ol>
+    </div></div></div>`;
+}
+
+/* ---------- events ---------- */
+function bindView(ex){
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.go;render();});
+  document.querySelectorAll('[data-review]').forEach(tr=>tr.onclick=()=>openReview(tr.dataset.review));
+  if(S.tab==='scan'){
+    const drop=$('#drop');
+    document.querySelectorAll('[data-live]').forEach(b=>b.onclick=openLive);
+    const ih=$('#iosHintOff'); if(ih) ih.onclick=()=>{ Settings.iosHintOff=true; saveSettings(); render(); };
+    $('#filePick').onchange=e=>{ handleFiles([...e.target.files]); e.target.value=''; };
+    $('#camPick').onchange=e=>{ handleFiles([...e.target.files]); e.target.value=''; };
+    ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over');}));
+    ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over');}));
+    drop.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
+  }
+  if(S.tab==='key'){
+    document.querySelectorAll('[data-k]').forEach(b=>b.onclick=async()=>{
+      const [q,i]=b.dataset.k.split(':').map(Number);
+      const arr=padKey(ex); arr[q] = arr[q]===LET[i]?'-':LET[i]; ex.key=arr.join('');
+      const row=b.parentElement; row.querySelectorAll('.bub').forEach((x,j)=>x.classList.toggle('on', ex.key[q]===LET[j]));
+      row.classList.toggle('missing', ex.key[q]==='-');
+      const kc=keyCount(ex); const ch=document.querySelector('.card .chip'); if(ch){ch.textContent=`${kc}/${ex.numQ} ข้อ`; ch.className='chip '+(kc===ex.numQ?'ok':'warn');}
+      await persist();
+    });
+    $('#exName').onchange=async e=>{ ex.name=e.target.value.trim()||'ชุดข้อสอบ'; await persist(); render(); };
+    $('#exN').onchange=async e=>{ const v=Math.max(1,Math.min(100,parseInt(e.target.value)||ex.numQ)); ex.numQ=v; ex.key=padKey(ex).join(''); await persist(); render(); };
+    $('#keyApply').onclick=async()=>{
+      const t=$('#keyText').value.replace(/\s|,/g,''); const map={'ก':'A','ข':'B','ค':'C','ง':'D','จ':'E','1':'A','2':'B','3':'C','4':'D','5':'E'};
+      const arr=[...t].map(c=>map[c]||(LET.includes(c.toUpperCase())?c.toUpperCase():'-'));
+      if(!arr.length) return;
+      ex.numQ=Math.min(100,Math.max(ex.numQ, arr.length>ex.numQ?arr.length:ex.numQ));
+      const k=padKey(ex); arr.slice(0,100).forEach((c,i)=>k[i]=c); ex.key=k.join('');
+      await persist(); toast(`ใส่เฉลย ${arr.length} ข้อแล้ว`); render();
+    };
+    $('#keyPick').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(f) readKeySheet(f); };
+    const d=$('#delExam'); if(d) d.onclick=()=>{S.pending='delExam';render();};
+    const dy=$('#delYes'); if(dy) dy.onclick=async()=>{ await Store.remove(ex.id); S.exams=S.exams.filter(e=>e.id!==ex.id); S.pending=null;
+      if(!S.exams.length){ const n={id:newId(),name:'ชุดข้อสอบใหม่',numQ:60,key:'-'.repeat(60),results:[],createdAt:Date.now()}; S.exams=[n]; await Store.save(n); }
+      S.cur=S.exams[0].id; toast('ลบชุดข้อสอบแล้ว'); render(); };
+    const dn=$('#delNo'); if(dn) dn.onclick=()=>{S.pending=null;render();};
+  }
+  if(S.tab==='scores' && ex.results.length){
+    $('#dlCsv').onclick=()=>saveFile(safeName(ex.name)+'_คะแนน.csv', scoresCsv(ex));
+    $('#cpTsv').onclick=()=>copyText(scoresCsv(ex,'\t').replace(/^﻿/,''));
+    const c=$('#clearAll'); if(c) c.onclick=()=>{S.pending='clear';render();};
+    const cy=$('#clearYes'); if(cy) cy.onclick=async()=>{ ex.results.forEach(r=>queueDelete(ex,r)); ex.results=[]; S.pending=null; await persist(); toast('ลบคะแนนแล้ว'); render(); };
+    const cn=$('#clearNo'); if(cn) cn.onclick=()=>{S.pending=null;render();};
+  }
+  if(S.tab==='items' && ex.results.length){ $('#dlItems').onclick=()=>saveFile(safeName(ex.name)+'_วิเคราะห์ข้อสอบ.csv', itemsCsv(ex)); }
+  if(S.tab==='gs') bindGs();
+  if(S.tab==='sheet'){ $('#dlSheet').onclick=async()=>{ try{ const b=await (await fetch('answer-sheet.pdf')).blob(); saveFile('กระดาษคำตอบ_100ข้อ.pdf', b); }catch(e){ toast('โหลดไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง'); } }; }
+}
+function padKey(ex){ const a=[...(ex.key||'')]; while(a.length<ex.numQ) a.push('-'); return a.slice(0,ex.numQ); }
+function safeName(s){ return s.replace(/[\\/:*?"<>|]/g,'_').slice(0,60); }
+
+$('#examSel').onchange=e=>{ S.cur=e.target.value; S.pending=null; try{localStorage.setItem('omr-cur',S.cur);}catch(_){} render(); };
+$('#newExam').onclick=async()=>{ const n={id:newId(),name:'ชุดข้อสอบใหม่ '+(S.exams.length+1),numQ:60,key:'-'.repeat(60),results:[],createdAt:Date.now()}; S.exams.unshift(n); S.cur=n.id; S.tab='key'; await Store.save(n); render(); $('#exName')?.select(); };
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;S.pending=null;render();});
+
+/* ---------- export ---------- */
+function csvCell(v,sep){ v=String(v); return (v.includes(sep)||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v; }
+function scoresCsv(ex,sep=','){
+  const kc=keyCount(ex);
+  const head=['ลำดับ','รหัสนักศึกษา','คะแนน','คะแนนเต็ม','ร้อยละ','ต้องตรวจ'].concat(Array.from({length:ex.numQ},(_,i)=>'ข้อ'+(i+1)));
+  const rs=[...ex.results].sort((a,b)=>String(a.sid).localeCompare(String(b.sid)));
+  const lines=[head.join(sep), ['','เฉลย','','','',''].concat([...padKey(ex)].map(thAns)).map(v=>csvCell(v,sep)).join(sep)];
+  rs.forEach((r,i)=>{ const s=scoreOf(ex,r.ans); lines.push([i+1,"'"+(r.sid||''),s,kc,kc?(s/kc*100).toFixed(2):'',flagsOf(r)||''].concat([...r.ans.slice(0,ex.numQ)].map(thAns)).map(v=>csvCell(v,sep)).join(sep)); });
+  return '﻿'+lines.join('\r\n');
+}
+function itemsCsv(ex){
+  const A=itemAnalysis(ex);
+  const lines=[['ข้อ','เฉลย','ความยาก p','อำนาจจำแนก r','ก','ข','ค','ง','จ','ไม่ตอบ/หลายข้อ','ตัวลวงไม่ทำงาน'].join(',')];
+  A.items.forEach(it=>lines.push([it.q+1,thAns(it.k),it.p===null?'':it.p.toFixed(3),it.r===null?'':it.r.toFixed(3),...it.cnt,it.deadD].join(',')));
+  return '﻿'+lines.join('\r\n');
+}
+function saveFile(name,data){
+  const blob = data instanceof Blob ? data : new Blob([data],{type:/\.csv$/.test(name)?'text/csv;charset=utf-8':'application/octet-stream'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+async function copyText(t,msg){
+  try{ await navigator.clipboard.writeText(t); toast(msg||'คัดลอกแล้ว วางใน Excel ได้เลย'); }
+  catch(e){ const ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;left:16px;right:16px;bottom:16px;height:40vh;z-index:50'; document.body.appendChild(ta); ta.select(); toast('กด Ctrl+C หรือคัดลอกจากกล่องนี้'); ta.onblur=()=>ta.remove(); }
+}
+
+/* ---------- image loading ---------- */
+const MAXDIM=2000;
+function toImageData(src,w,h){
+  const s=Math.min(1,MAXDIM/Math.max(w,h)); const cw=Math.round(w*s), ch=Math.round(h*s);
+  const c=document.createElement('canvas'); c.width=cw; c.height=ch; const x=c.getContext('2d',{willReadFrequently:true});
+  x.fillStyle='#fff'; x.fillRect(0,0,cw,ch); x.drawImage(src,0,0,cw,ch);
+  return {canvas:c, data:x.getImageData(0,0,cw,ch)};
+}
+async function loadImageFile(f){
+  try{ const bm=await createImageBitmap(f,{imageOrientation:'from-image'}); const r=toImageData(bm,bm.width,bm.height); bm.close&&bm.close(); return r; }
+  catch(e){ const url=URL.createObjectURL(f); try{ const im=new Image(); im.src=url; await im.decode(); return toImageData(im,im.naturalWidth,im.naturalHeight); } finally{ URL.revokeObjectURL(url); } }
+}
+let pdfReady=null;
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+function ensurePdf(){
+  if(!pdfReady) pdfReady=(async()=>{
+    const base='vendor/';
+    await loadScript(base+'pdf.min.js'); await loadScript(base+'pdf.worker.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.js';
+  })();
+  return pdfReady;
+}
+async function* pdfPages(f){
+  await ensurePdf();
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p); const v0=page.getViewport({scale:1});
+    const sc=MAXDIM/Math.max(v0.width,v0.height); const v=page.getViewport({scale:sc});
+    const c=document.createElement('canvas'); c.width=Math.round(v.width); c.height=Math.round(v.height);
+    const x=c.getContext('2d',{willReadFrequently:true}); x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height);
+    await page.render({canvasContext:x,viewport:v}).promise;
+    yield {page:p,total:doc.numPages, canvas:c, data:x.getImageData(0,0,c.width,c.height)};
+    page.cleanup();
+  }
+}
+async function* expand(files){
+  for(const f of files){
+    const isPdf = f.type==='application/pdf' || /\.pdf$/i.test(f.name);
+    if(isPdf){
+      try{ for await (const pg of pdfPages(f)) yield {src:`${f.name} หน้า ${pg.page}`, ...pg}; }
+      catch(e){ yield {src:f.name, error:'เปิดไฟล์ PDF ไม่ได้'}; }
+    } else {
+      try{ yield {src:f.name, ...(await loadImageFile(f))}; }
+      catch(e){ yield {src:f.name, error:'เปิดไฟล์ภาพไม่ได้'}; }
+    }
+  }
+}
+const tick=()=>new Promise(r=>setTimeout(r,0));
+
+// straightened copy of the sheet, 4 px per mm, for the review view
+const RK=4;
+function rectify(img, H){
+  const W=Math.round(LAYOUT.page[0]*RK), Hh=Math.round(LAYOUT.page[1]*RK);
+  const c=document.createElement('canvas'); c.width=W; c.height=Hh; const x=c.getContext('2d');
+  const out=x.createImageData(W,Hh), o=out.data, d=img.data, iw=img.width, ih=img.height;
+  for(let y=0;y<Hh;y++) for(let X=0;X<W;X++){
+    const [u,v]=OMR.apply(H,(X+.5)/RK,(y+.5)/RK); const j=(y*W+X)*4;
+    const xi=Math.round(u), yi=Math.round(v);
+    if(xi<0||yi<0||xi>=iw||yi>=ih){ o[j]=o[j+1]=o[j+2]=255; o[j+3]=255; continue; }
+    const i=(yi*iw+xi)*4; o[j]=d[i]; o[j+1]=d[i+1]; o[j+2]=d[i+2]; o[j+3]=255;
+  }
+  x.putImageData(out,0,0);
+  return c.toDataURL('image/jpeg',0.75);
+}
+
+function resultFromRead(r, ex){
+  const nq=ex.numQ; let ans=''; const flags=[];
+  const multi={};
+  for(let q=0;q<nq;q++){ const a=r.answers[q]; ans+= a.pick>=0?LET[a.pick]: a.state==='multi'?'*':'-'; if(a.state==='multi'||a.state==='unsure') flags.push(q); if(a.state==='multi') multi[q]=a.picks; }
+  const sid=r.id.str.replace(/\s/g,'');
+  return {ans, flags, sid, multi};
+}
+
+async function handleFiles(files){
+  const ex=exam(); if(!ex||!files.length) return;
+  if(S.busy){ toast('กำลังตรวจชุดก่อนหน้า รอสักครู่'); return; }
+  S.busy=true; S.prog=2; S.progText='กำลังเปิดไฟล์…'; render();
+  let done=0, ok=0, fail=0, est=files.length;
+  for await (const it of expand(files)){
+    if(it.total) est=Math.max(est, done+ (it.total-it.page+1) + (files.length-1));
+    S.progText=`กำลังอ่าน ${it.src}`; S.prog=Math.min(98,Math.round(done/est*100)+2); updateProgress(); await tick();
+    const entry={exam:ex.id, src:it.src, uid:null};
+    if(it.error){ entry.error=it.error; fail++; }
+    else{
+      const r=OMR.read({width:it.data.width,height:it.data.height,data:it.data.data}, LAYOUT, {numQ:ex.numQ});
+      if(!r.ok){ entry.error='หาสี่เหลี่ยมดำที่มุมไม่ครบ 4 มุม ถ่ายใหม่ให้เห็นทั้งแผ่น'; fail++; }
+      else{
+        const {rec,replaced}=addResult(ex, r, it.data, it.src);
+        entry.uid=rec.uid; entry.replaced=replaced;
+        ok++;
+      }
+    }
+    S.session.push(entry); done++;
+  }
+  await persist();
+  S.busy=false; render();
+  toast(`ตรวจแล้ว ${ok} แผ่น${fail?` · อ่านไม่ได้ ${fail} แผ่น`:''}`);
+}
+function updateProgress(){ const p=document.querySelector('.progress i'); if(p) p.style.width=S.prog+'%'; const t=document.querySelector('.progress + p'); if(t) t.textContent=S.progText; if(!p) render(); }
+
+async function readKeySheet(f){
+  const ex=exam(); toast('กำลังอ่านเฉลย…');
+  let first=null; for await (const it of expand([f])){ first=it; break; }
+  if(!first||first.error){ toast('เปิดไฟล์ไม่ได้'); return; }
+  const r=OMR.read({width:first.data.width,height:first.data.height,data:first.data.data}, LAYOUT, {numQ:100});
+  if(!r.ok){ toast('หาสี่เหลี่ยมดำที่มุมไม่ครบ ถ่ายใหม่ให้เห็นทั้งแผ่น'); return; }
+  let last=0; const k=r.answers.map((a,i)=>{ if(a.pick>=0){ last=i+1; return LET[a.pick]; } return '-'; });
+  if(!last){ toast('ไม่พบคำตอบบนกระดาษแผ่นนี้'); return; }
+  const unsure=r.answers.slice(0,last).filter(a=>a.state!=='ok').length;
+  ex.numQ=last; ex.key=k.slice(0,last).join('');
+  await persist(); render();
+  toast(`อ่านเฉลยได้ ${last} ข้อ${unsure?` · มี ${unsure} ข้อที่ควรตรวจ (ขอบแดง)`:''}`);
+}
+
+/* ---------- review drawer ---------- */
+function openReview(uid, onClose){
+  const ex=exam(); const r=ex.results.find(x=>x.uid===uid); if(!r) return;
+  const img=S.images[uid]; let showAll=!(r.flags||[]).length;
+  const draw=()=>{
+    const kc=keyCount(ex), s=scoreOf(ex,r.ans), fl=new Set(r.flags||[]);
+    const qs = showAll? [...Array(ex.numQ).keys()] : [...fl];
+    $('#layer2').innerHTML=`<div class="overlay" id="ov"><div class="drawer" role="dialog" aria-label="ตรวจกระดาษคำตอบ">
+      <div class="drawer-head">
+        <div class="grow" style="flex-basis:220px"><label class="hint" for="sidIn">รหัสนักศึกษา</label>
+          <input type="text" id="sidIn" class="mono" value="${esc(r.sid)}" inputmode="numeric" style="width:100%;${/^\d+$/.test(r.sid)?'':'border-color:var(--bad)'}"></div>
+        <div class="stat" style="min-width:110px"><b>${s}/${kc}</b><span>คะแนน</span></div>
+        <button class="primary" id="rvDone">เสร็จ</button>
+      </div>
+      <div class="drawer-body">
+        <div>${img?`<div class="sheetview"><canvas id="rvCanvas"></canvas></div><p class="hint" style="margin-top:6px">เขียว = ถูก · แดง = ผิด · เหลือง = ข้อที่ต้องตรวจ</p>`:
+          `<div class="card hint">ภาพของแผ่นนี้ไม่ได้เก็บไว้ (สแกนในรอบก่อน) แก้คำตอบได้จากรายการด้านขวา</div>`}</div>
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="row"><h3 style="margin:0">${showAll?'คำตอบทุกข้อ':`ข้อที่ต้องตรวจ ${fl.size} ข้อ`}</h3><span class="grow"></span>
+            <button id="rvToggle">${showAll?'ดูเฉพาะข้อที่ต้องตรวจ':'แสดงทุกข้อ'}</button></div>
+          ${!/^\d+$/.test(r.sid)?'<p class="hint" style="color:var(--bad)">อ่านรหัสนักศึกษาไม่ครบ ดูจากภาพแล้วพิมพ์ในช่องด้านบน</p>':''}
+          ${qs.length?`<div class="card" style="padding:10px 14px">${qs.map(q=>{ const a=r.ans[q], k=ex.key[q];
+            return `<div class="krow"><span class="n" ${fl.has(q)?'style="color:var(--warn);font-weight:600"':''}>${q+1}</span>${TH.map((t,i)=>{ const on=a===LET[i]; const det=(r.multi&&r.multi[q]||[]).includes(i)&&a==='*'; const cls= (on? (LET[i]===k?'on right':'on wrong'):'')+(det?' det':''); return `<button class="bub ${cls}" data-a="${q}:${i}" aria-label="ข้อ ${q+1} ${t}">${t}</button>`; }).join('')}
+            <span class="hint" style="margin-left:8px;font-size:12.5px">${a==='*'?'ตอบหลายข้อ (ขอบเหลือง)':a==='-'?'ไม่ได้ตอบ':''}${'ABCDE'.includes(k)?` · เฉลย ${thAns(k)}`:''}</span>
+            ${fl.has(q)?`<button class="ghost" data-okq="${q}" style="margin-left:auto;padding:2px 8px">ยืนยัน</button>`:''}</div>`; }).join('')}</div>`:
+            '<div class="card hint">ไม่มีข้อที่ต้องตรวจ</div>'}
+          <div class="row">${S.pending==='delRes'?`<span class="confirm">ลบผลของแผ่นนี้? <button class="danger" id="rvDelYes">ลบ</button><button id="rvDelNo">ยกเลิก</button></span>`:'<button class="ghost danger" id="rvDel">ลบผลแผ่นนี้</button>'}</div>
+        </div>
+      </div></div></div>`;
+    if(img) paintSheet(img, ex, r);
+    $('#ov').onclick=e=>{ if(e.target.id==='ov') close(); };
+    $('#rvDone').onclick=close;
+    $('#rvToggle').onclick=()=>{showAll=!showAll; draw();};
+    $('#sidIn').onchange=async e=>{ r.sid=e.target.value.replace(/\s/g,''); r.edited=true; await persist(); draw(); };
+    document.querySelectorAll('[data-a]').forEach(b=>b.onclick=async()=>{ const [q,i]=b.dataset.a.split(':').map(Number);
+      const arr=[...r.ans]; arr[q]= arr[q]===LET[i]?'-':LET[i]; r.ans=arr.join(''); r.flags=(r.flags||[]).filter(x=>x!==q); r.edited=true; await persist(); draw(); });
+    document.querySelectorAll('[data-okq]').forEach(b=>b.onclick=async()=>{ const q=+b.dataset.okq; r.flags=(r.flags||[]).filter(x=>x!==q); r.edited=true; await persist(); draw(); });
+    const d=$('#rvDel'); if(d) d.onclick=()=>{S.pending='delRes';draw();};
+    const dy=$('#rvDelYes'); if(dy) dy.onclick=async()=>{ queueDelete(ex,r); ex.results=ex.results.filter(x=>x!==r); S.pending=null; await persist(); close(); toast('ลบผลแล้ว'); };
+    const dn=$('#rvDelNo'); if(dn) dn.onclick=()=>{S.pending=null;draw();};
+  };
+  const close=()=>{ $('#layer2').innerHTML=''; S.pending=null; document.removeEventListener('keydown',onKey); render(); if(onClose) onClose(); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  document.addEventListener('keydown',onKey);
+  draw();
+}
+function paintSheet(img, ex, r){
+  const c=$('#rvCanvas'); const im=new Image();
+  im.onload=()=>{
+    c.width=im.naturalWidth; c.height=im.naturalHeight; const x=c.getContext('2d'); x.drawImage(im,0,0);
+        const col={ok:'#17a35e',bad:'#d6372e',warn:'#e9a400'};
+    const P=(mx,my)=>[mx*RK,my*RK];
+    const rad=LAYOUT.qR*RK*1.45, fl=new Set(r.flags||[]);
+    x.lineWidth=Math.max(2,rad*0.28);
+    for(let q=0;q<ex.numQ;q++){
+      const a=r.ans[q], k=ex.key[q];
+      if(fl.has(q)){ const [u1,v1]=P(...LAYOUT.questions[q][0]); const [u2,v2]=P(...LAYOUT.questions[q][4]);
+        x.strokeStyle=col.warn; x.strokeRect(Math.min(u1,u2)-rad*1.2, Math.min(v1,v2)-rad*1.2, Math.abs(u2-u1)+rad*2.4, Math.abs(v2-v1)+rad*2.4); }
+      const i=LET.indexOf(a);
+      if(i>=0){ const [u,v]=P(...LAYOUT.questions[q][i]); x.strokeStyle= a===k?col.ok:col.bad; x.beginPath(); x.arc(u,v,rad,0,Math.PI*2); x.stroke(); }
+      if('ABCDE'.includes(k) && a!==k){ const [u,v]=P(...LAYOUT.questions[q][LET.indexOf(k)]); x.strokeStyle=col.ok; x.setLineDash([rad*.4,rad*.3]); x.beginPath(); x.arc(u,v,rad*.8,0,Math.PI*2); x.stroke(); x.setLineDash([]); }
+    }
+    LAYOUT.idCols.forEach((colm,ci)=>{ const d=r.sid[ci]; if(d>='0'&&d<='9'){ const [u,v]=P(...colm[+d]); x.strokeStyle=col.ok; x.beginPath(); x.arc(u,v,LAYOUT.idR*RK*1.4,0,Math.PI*2); x.stroke(); } });
+  };
+  im.src=img.url;
+}
+
+/* ================= PWA additions: settings, Google Sheet sync, live camera ================= */
+const CAN_LIVE = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && window.isSecureContext;
+
+/* ---------- settings ---------- */
+function randToken(){ const a=new Uint8Array(9); (self.crypto||window.msCrypto).getRandomValues(a); return 'omr-'+[...a].map(b=>b.toString(36).padStart(2,'0')).join('').slice(0,14); }
+const Settings = (()=>{ let s={}; try{ s=JSON.parse(localStorage.getItem('omr-settings')||'{}'); }catch(e){}
+  return Object.assign({url:'', token:'', auto:true, sheetName:'', sheetUrl:'', iosHintOff:false}, s); })();
+if(!Settings.token) Settings.token=randToken();
+function saveSettings(){ try{ localStorage.setItem('omr-settings', JSON.stringify(Settings)); }catch(e){} }
+saveSettings();
+
+/* ---------- results bookkeeping shared by file scans and the live camera ---------- */
+function queueDelete(ex, r){ if(r && r.syncedSig){ (ex.deletes=ex.deletes||[]).push(r.uid); } }
+function addResult(ex, r, data, src){
+  const res=resultFromRead(r,ex);
+  const uid='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const prev=res.sid && /^\d+$/.test(res.sid) ? ex.results.findIndex(x=>x.sid===res.sid) : -1;
+  const rec={uid, sid:res.sid, ans:res.ans, flags:res.flags, multi:res.multi, src, at:Date.now()};
+  let replaced=false;
+  if(prev>=0){ queueDelete(ex, ex.results[prev]); ex.results.splice(prev,1); replaced=true; }
+  ex.results.push(rec);
+  try{ S.images[uid]={url:rectify(data, r.H)}; }catch(e){}
+  return {rec, replaced};
+}
+
+/* ---------- Google Sheet sync ---------- */
+const Sync={busy:false, timer:null, retry:null, err:null, last:null, again:false};
+function sigOf(ex,r){ return [r.sid,r.ans,ex.key,ex.numQ,ex.name,flagsOf(r)].join('|'); }
+function dirtyRows(ex){ return ex.results.filter(r=>r.syncedSig!==sigOf(ex,r)); }
+function pendingCount(){ return S.exams.reduce((n,ex)=>n+dirtyRows(ex).length+(ex.deletes||[]).length,0); }
+function scheduleSync(ms=1500){ updateSyncChip(); if(!Settings.url||!Settings.auto) return; clearTimeout(Sync.timer); Sync.timer=setTimeout(()=>doSync(false),ms); }
+function errText(e){
+  const m=String(e&&e.message||e);
+  if(m==='token') return 'รหัสลับไม่ตรงกับในโค้ด Apps Script';
+  if(m==='html'||e instanceof TypeError) return 'เชื่อมต่อไม่ได้ ตรวจ URL ว่าลงท้ายด้วย /exec และตั้งสิทธิ์เข้าถึงเป็น "ทุกคน"';
+  if(m==='offline') return 'ไม่มีอินเทอร์เน็ต จะส่งให้เมื่อกลับมาออนไลน์';
+  return m;
+}
+async function gsPost(payload){
+  const res=await fetch(Settings.url,{method:'POST', body:JSON.stringify(Object.assign({token:Settings.token},payload)), redirect:'follow'});
+  const t=await res.text(); let j;
+  try{ j=JSON.parse(t); }catch(e){ throw new Error(/<html|<!doctype/i.test(t)?'html':'ตอบกลับไม่ถูกต้อง'); }
+  return j;
+}
+function rowPayload(ex,r){
+  const kc=keyCount(ex), s=scoreOf(ex,r.ans);
+  return {uid:r.uid, sid:r.sid, score:s, total:kc, pct:kc?Math.round(s/kc*10000)/100:'', flags:flagsOf(r)||'', at:r.at,
+    ansTh:[...r.ans.slice(0,ex.numQ)].map(c=>c==='*'?'หลายข้อ':c==='-'?'':thAns(c))};
+}
+async function doSync(manual){
+  if(!Settings.url){ if(manual) toast('ยังไม่ได้เชื่อม Google Sheet'); return; }
+  if(Sync.busy){ Sync.again=true; return; }
+  if(!navigator.onLine){ Sync.err=errText('offline'); updateSyncChip(); return; }
+  Sync.busy=true; updateSyncChip();
+  let sent=0, removed=0;
+  try{
+    for(const ex of S.exams){
+      const d=dirtyRows(ex), dels=[...(ex.deletes||[])];
+      if(!d.length && !dels.length) continue;
+      const parts=Math.max(1,Math.ceil(d.length/150));
+      for(let i=0;i<parts;i++){
+        const chunk=d.slice(i*150,(i+1)*150), sigs=chunk.map(r=>sigOf(ex,r));
+        const j=await gsPost({action:'sync',
+          exam:{id:ex.id, name:ex.name, numQ:ex.numQ, keyTh:padKey(ex).map(c=>'ABCDE'.includes(c)?thAns(c):'')},
+          rows:chunk.map(r=>rowPayload(ex,r)), deletes:i===0?dels:[]});
+        if(!j.ok) throw new Error(j.error||'ส่งไม่สำเร็จ');
+        chunk.forEach((r,k)=>{ r.syncedSig=sigs[k]; });
+        if(i===0){ ex.deletes=(ex.deletes||[]).filter(u=>!dels.includes(u)); removed+=dels.length; }
+        if(j.url){ ex.sheetUrl=j.url; }
+        sent+=chunk.length;
+        await Store.save(ex);
+      }
+    }
+    Sync.err=null; Sync.last=Date.now(); saveSettings();
+    if(manual) toast(sent||removed?`ส่งเข้า Google Sheet แล้ว ${sent} คน`:'คะแนนใน Google Sheet เป็นปัจจุบันแล้ว');
+  }catch(e){
+    Sync.err=errText(e); if(manual) toast('ส่งไม่สำเร็จ: '+Sync.err);
+    clearTimeout(Sync.retry); Sync.retry=setTimeout(()=>doSync(false),30000);
+  }finally{
+    Sync.busy=false; updateSyncChip(); updateGsStatus();
+    if(Sync.again){ Sync.again=false; scheduleSync(300); }
+  }
+}
+window.addEventListener('online',()=>scheduleSync(500));
+function updateSyncChip(){
+  const b=document.getElementById('syncChip'); if(!b) return;
+  const n=pendingCount();
+  let t,c;
+  if(!Settings.url){ t='Google Sheet: ยังไม่เชื่อม'; c='plain'; }
+  else if(Sync.busy){ t='กำลังส่งเข้า Sheet…'; c='plain'; }
+  else if(Sync.err){ t=`ส่งไม่สำเร็จ · ค้าง ${n}`; c=navigator.onLine?'bad':'warn'; }
+  else if(n){ t=`ค้างส่ง ${n}`; c='warn'; }
+  else { t='Google Sheet ✓'; c='ok'; }
+  b.textContent=t; b.className='chip syncchip '+c;
+}
+function gsStatusHtml(){
+  const n=pendingCount(), ex=exam();
+  if(!Settings.url) return `<span class="chip plain">ยังไม่เชื่อม</span><p class="hint" style="margin-top:6px">ตอนนี้คะแนนเก็บอยู่ในเครื่องนี้เท่านั้น ทำตามขั้นตอนด้านล่างครั้งเดียว แล้วคะแนนจะเข้า Google Sheet เองทุกครั้งที่สแกน</p>`;
+  return `<div class="row">${Sync.err?`<span class="chip bad">ส่งไม่สำเร็จ</span>`:n?`<span class="chip warn">ค้างส่ง ${n} รายการ</span>`:'<span class="chip ok">ส่งครบแล้ว</span>'}
+      ${Settings.sheetName?`<span class="hint">ไฟล์: <b>${esc(Settings.sheetName)}</b></span>`:''}
+      ${Sync.last?`<span class="hint">ส่งล่าสุด ${new Date(Sync.last).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.</span>`:''}</div>
+    ${Sync.err?`<p class="hint" style="color:var(--bad);margin-top:6px">${esc(Sync.err)}</p>`:''}
+    <div class="row" style="margin-top:10px"><button class="primary" id="gsNow">ส่งตอนนี้</button>
+      ${ex&&ex.sheetUrl?`<a class="btn" href="${esc(ex.sheetUrl)}" target="_blank" rel="noopener">เปิดแท็บของชุดนี้ใน Google Sheet</a>`:''}
+      <button class="ghost" id="gsAll">ส่งคะแนนทุกคนซ้ำ</button></div>`;
+}
+function updateGsStatus(){ const el=document.getElementById('gsStatus'); if(el){ el.innerHTML=gsStatusHtml(); bindGsStatus(); } }
+function bindGsStatus(){
+  const a=document.getElementById('gsNow'); if(a) a.onclick=()=>doSync(true);
+  const b=document.getElementById('gsAll'); if(b) b.onclick=()=>{ S.exams.forEach(ex=>ex.results.forEach(r=>{ r.syncedSig=null; })); S.exams.forEach(ex=>Store.save(ex)); doSync(true); };
+}
+function gsCode(){ return GS_CODE.replace('__TOKEN__', Settings.token); }
+function viewGs(){
+  return `<div class="card"><h2>Google Sheet</h2><div id="gsStatus" style="margin-top:6px">${gsStatusHtml()}</div></div>
+  <div class="card"><h3>เชื่อมต่อ</h3>
+    <label class="hint" for="gsUrl">URL ของเว็บแอป Apps Script (ลงท้ายด้วย /exec)</label>
+    <div class="row" style="margin-top:4px"><input type="text" id="gsUrl" class="grow mono" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(Settings.url)}"><button id="gsTest" class="primary">ทดสอบและบันทึก</button></div>
+    <div class="row" style="margin-top:12px">
+      <div class="grow"><label class="hint" for="gsToken">รหัสลับ (ต้องตรงกับในโค้ด)</label><input type="text" id="gsToken" class="mono" value="${esc(Settings.token)}" style="width:100%"></div>
+      <label class="row" style="gap:6px;margin-top:18px"><input type="checkbox" id="gsAuto" ${Settings.auto?'checked':''}> ส่งอัตโนมัติหลังสแกน</label>
+    </div>
+    <p class="hint" style="margin-top:8px">ใช้หลายเครื่องส่งเข้า Sheet เดียวกันได้ ให้ใส่ URL และรหัสลับเดียวกันทุกเครื่อง</p>
+  </div>
+  <div class="card"><h3>ตั้งค่าครั้งแรก (ประมาณ 5 นาที)</h3>
+    <ol class="steps">
+      <li>เปิด <a href="https://sheets.new" target="_blank" rel="noopener">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อเช่น “คะแนนสอบ 1/2569”</li>
+      <li>ในชีต เลือกเมนู <b>ส่วนขยาย › Apps Script</b> (Extensions › Apps Script) ลบโค้ดเดิมทั้งหมด แล้ววางโค้ดที่คัดลอกจากปุ่มนี้
+        <div class="row" style="margin:8px 0"><button id="gsCopy" class="primary">คัดลอกโค้ด</button><span class="hint">รหัสลับของเครื่องนี้ใส่ไว้ในโค้ดให้แล้ว</span></div>
+        <details><summary class="hint">ดูโค้ด</summary><pre class="code" id="gsCodeBox">${esc(gsCode())}</pre></details></li>
+      <li>กดบันทึก 💾 แล้วกด <b>ทำให้ใช้งานได้ › การทำให้ใช้งานได้รายการใหม่</b> (Deploy › New deployment) กดรูปเฟืองเลือก <b>เว็บแอป</b> (Web app)</li>
+      <li>ตั้ง <b>ดำเนินการในฐานะ: ฉัน</b> (Execute as: Me) และ <b>ผู้ที่มีสิทธิ์เข้าถึง: ทุกคน</b> (Who has access: Anyone) แล้วกดทำให้ใช้งานได้</li>
+      <li>Google จะขอสิทธิ์ เลือกบัญชีของอาจารย์ ถ้าขึ้นว่า “Google ยังไม่ได้ยืนยันแอปนี้” ให้กด <b>ขั้นสูง › ไปที่ … (ไม่ปลอดภัย)</b> ได้ เพราะเป็นโค้ดในบัญชีของอาจารย์เอง</li>
+      <li>คัดลอก URL ของเว็บแอปมาวางในช่องด้านบน แล้วกด <b>ทดสอบและบันทึก</b></li>
+    </ol>
+    <p class="hint">แต่ละชุดข้อสอบจะเป็นแท็บแยกในชีต แถวที่ 2 เป็นเฉลย ตามด้วยรหัสนักศึกษา คะแนน และคำตอบรายข้อ ถ้าแก้คำตอบหรือเฉลยในแอป คะแนนในชีตจะอัปเดตตาม</p>
+  </div>`;
+}
+function bindGs(){
+  bindGsStatus();
+  $('#gsTest').onclick=async()=>{
+    const url=$('#gsUrl').value.trim(); Settings.token=$('#gsToken').value.trim()||Settings.token;
+    if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url) && !/^https?:\/\/localhost/.test(url)){ toast('URL ต้องขึ้นต้นด้วย https://script.google.com/'); return; }
+    Settings.url=url; saveSettings();
+    const b=$('#gsTest'); b.disabled=true; b.textContent='กำลังทดสอบ…';
+    try{
+      const j=await gsPost({action:'ping'});
+      if(!j.ok) throw new Error(j.error||'error');
+      Settings.sheetName=j.sheet||''; Sync.err=null; saveSettings();
+      toast('เชื่อมต่อสำเร็จ'); render(); doSync(false);
+    }catch(e){ Sync.err=errText(e); toast('เชื่อมต่อไม่ได้: '+Sync.err); render(); }
+  };
+  $('#gsToken').onchange=e=>{ Settings.token=e.target.value.trim()||Settings.token; saveSettings(); const box=$('#gsCodeBox'); if(box) box.textContent=gsCode(); };
+  $('#gsAuto').onchange=e=>{ Settings.auto=e.target.checked; saveSettings(); if(Settings.auto) scheduleSync(300); };
+  $('#gsCopy').onclick=()=>copyText(gsCode(),'คัดลอกโค้ดแล้ว ไปวางใน Apps Script ได้เลย');
+}
+
+/* ---------- install ---------- */
+let deferredInstall=null;
+const IS_IOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const IS_STANDALONE=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredInstall=e; const b=$('#installBtn'); if(b) b.hidden=false; });
+function installBanner(){
+  if(!IS_IOS||IS_STANDALONE||Settings.iosHintOff) return '';
+  return `<div class="card row" id="iosHint"><div class="grow"><b>ติดตั้งเป็นแอปบน iPhone</b><p class="hint">ใน Safari กดปุ่มแชร์ (สี่เหลี่ยมมีลูกศรขึ้น) แล้วเลือก “เพิ่มไปยังหน้าจอโฮม”</p></div><button class="ghost" id="iosHintOff">ปิด</button></div>`;
+}
+
+/* ---------- live camera scanner ---------- */
+const Live={on:false};
+let audioCtx=null;
+function feedback(ok){
+  try{ if(audioCtx){ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.value=ok?1320:440; g.gain.setValueAtTime(0.18,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.18); o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.2); } }catch(e){}
+  try{ navigator.vibrate&&navigator.vibrate(ok?70:[40,60,40]); }catch(e){}
+}
+function setHint(t,cls){ const h=document.getElementById('camHint'); if(h&&h.textContent!==t){ h.textContent=t; } if(h) h.className='camhint'+(cls?' '+cls:''); }
+function quadArea(p){ let a=0; for(let i=0;i<4;i++){ const q=p[(i+1)%4]; a+=p[i][0]*q[1]-q[0]*p[i][1]; } return Math.abs(a)/2; }
+function grab(canvas, v, maxDim){
+  const vw=v.videoWidth, vh=v.videoHeight, s=Math.min(1,maxDim/Math.max(vw,vh));
+  const w=Math.round(vw*s), h=Math.round(vh*s);
+  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; }
+  const x=canvas.getContext('2d',{willReadFrequently:true}); x.drawImage(v,0,0,w,h);
+  return {s, data:x.getImageData(0,0,w,h)};
+}
+function drawOverlay(corners, s, good){
+  const v=document.getElementById('camVid'), ov=document.getElementById('camOv'); if(!v||!ov) return;
+  const cw=ov.clientWidth, ch=ov.clientHeight, dpr=window.devicePixelRatio||1;
+  if(ov.width!==Math.round(cw*dpr)||ov.height!==Math.round(ch*dpr)){ ov.width=Math.round(cw*dpr); ov.height=Math.round(ch*dpr); }
+  const x=ov.getContext('2d'); x.setTransform(dpr,0,0,dpr,0,0); x.clearRect(0,0,cw,ch);
+  if(!corners||!v.videoWidth) return;
+  const vw=v.videoWidth, vh=v.videoHeight, k=Math.min(cw/vw,ch/vh), ox=(cw-vw*k)/2, oy=(ch-vh*k)/2;
+  const P=corners.map(([a,b])=>[ox+a/s*k, oy+b/s*k]);
+  x.lineWidth=4; x.lineJoin='round'; x.strokeStyle=good?'#2ecc71':'#f1c40f'; x.fillStyle=good?'rgba(46,204,113,.14)':'rgba(241,196,15,.10)';
+  x.beginPath(); P.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b)); x.closePath(); x.fill(); x.stroke();
+  P.forEach(([a,b])=>{ x.beginPath(); x.arc(a,b,7,0,Math.PI*2); x.fillStyle=good?'#2ecc71':'#f1c40f'; x.fill(); });
+}
+async function openLive(){
+  const ex=exam(); if(!ex) return;
+  try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); audioCtx.resume&&audioCtx.resume(); }catch(e){}
+  Object.assign(Live,{on:true,stable:0,prev:null,missing:0,lastSid:null,lastAns:null,lastReadAt:0,attempts:0,count:0,paused:false});
+  $('#layer').innerHTML=`<div class="cam" id="cam" role="dialog" aria-label="สแกนด้วยกล้อง">
+    <video id="camVid" playsinline muted autoplay></video><canvas id="camOv"></canvas>
+    <div class="camtop"><div><b>${esc(ex.name)}</b><span id="camCount">สแกนแล้ว 0 แผ่น</span></div>
+      <button id="camTorch" hidden>ไฟฉาย</button><button id="camClose" class="primary">เสร็จ</button></div>
+    <div class="camhint" id="camHint">กำลังเปิดกล้อง…</div>
+    <div class="camres" id="camRes" hidden></div></div>`;
+  $('#camClose').onclick=closeLive;
+  try{
+    Live.stream=await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+  }catch(e){
+    closeLive();
+    toast(e&&e.name==='NotAllowedError'?'แอปยังไม่ได้รับอนุญาตให้ใช้กล้อง เปิดสิทธิ์กล้องในการตั้งค่าของเบราว์เซอร์':'เปิดกล้องไม่ได้ ใช้ปุ่ม “ถ่ายรูป” แทน');
+    return;
+  }
+  if(!Live.on){ Live.stream.getTracks().forEach(t=>t.stop()); return; }
+  const v=$('#camVid'); v.srcObject=Live.stream; try{ await v.play(); }catch(e){}
+  Live.track=Live.stream.getVideoTracks()[0];
+  try{
+    const cap=Live.track.getCapabilities&&Live.track.getCapabilities();
+    if(cap&&cap.torch){ const t=$('#camTorch'); t.hidden=false; let on=false;
+      t.onclick=async()=>{ on=!on; try{ await Live.track.applyConstraints({advanced:[{torch:on}]}); t.classList.toggle('on',on); }catch(e){ on=!on; } }; }
+    if(cap&&cap.focusMode&&cap.focusMode.includes('continuous')) Live.track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+  }catch(e){}
+  try{ Live.wake=await navigator.wakeLock.request('screen'); }catch(e){}
+  Live.small=document.createElement('canvas'); Live.full=document.createElement('canvas');
+  setHint('เล็งให้เห็นสี่เหลี่ยมดำครบ 4 มุม');
+  liveLoop();
+}
+function closeLive(){
+  Live.on=false; clearTimeout(Live.t);
+  try{ Live.stream&&Live.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ Live.wake&&Live.wake.release(); }catch(e){}
+  Live.stream=null; Live.wake=null; $('#layer').innerHTML=''; render();
+}
+document.addEventListener('visibilitychange',async()=>{ if(Live.on&&document.visibilityState==='visible'&&!Live.wake){ try{ Live.wake=await navigator.wakeLock.request('screen'); }catch(e){} } if(document.visibilityState==='hidden') Live.wake=null; });
+async function liveLoop(){
+  if(!Live.on) return;
+  let delay=160;
+  const v=document.getElementById('camVid');
+  try{
+    if(!Live.paused && v && v.readyState>=2 && v.videoWidth){
+      const g=grab(Live.small,v,720);
+      const loc=OMR.locate({width:g.data.width,height:g.data.height,data:g.data.data},LAYOUT);
+      if(loc.error){
+        Live.missing++; Live.stable=0; Live.prev=null; Live.attempts=0; drawOverlay(null);
+        if(Live.missing>=2) setHint(Live.count?'วางแผ่นถัดไป ให้เห็นสี่เหลี่ยมดำครบ 4 มุม':'เล็งให้เห็นสี่เหลี่ยมดำครบ 4 มุม');
+      } else {
+        Live.missing=0;
+        const W=g.data.width, H=g.data.height, dim=Math.max(W,H);
+        const mv=Live.prev?Math.max(...loc.corners.map((p,i)=>Math.hypot(p[0]-Live.prev[i][0],p[1]-Live.prev[i][1])))/dim:1;
+        Live.prev=loc.corners;
+        Live.stable = mv<0.015 ? Live.stable+1 : 1;
+        const area=quadArea(loc.corners)/(W*H);
+        drawOverlay(loc.corners,g.s,Live.stable>=3&&area>=0.25);
+        if(area<0.25){ setHint('เลื่อนกล้องเข้าใกล้อีกนิด ให้กระดาษเต็มจอ'); Live.stable=0; }
+        else if(Live.stable<3){ if(!/ตรวจแล้ว|บันทึกแล้ว/.test(($('#camHint')||{}).textContent||'')) setHint('ถือนิ่ง ๆ…'); }
+        else if(Date.now()-Live.lastReadAt>650){ await liveRead(v); delay=220; }
+      }
+    }
+  }catch(e){ console.error(e); }
+  Live.t=setTimeout(liveLoop,delay);
+}
+async function liveRead(v){
+  const ex=exam(); Live.lastReadAt=Date.now();
+  const g=grab(Live.full,v,2000);
+  const r=OMR.read({width:g.data.width,height:g.data.height,data:g.data.data},LAYOUT,{numQ:ex.numQ});
+  if(!r.ok) return;
+  const res=resultFromRead(r,ex), sidOk=/^\d+$/.test(res.sid);
+  if((sidOk&&res.sid===Live.lastSid)||(!sidOk&&res.ans===Live.lastAns)){ setHint('แผ่นนี้ตรวจแล้ว เปลี่ยนแผ่นถัดไปได้เลย','done'); return; }
+  if((res.flags.length>Math.max(3,ex.numQ*0.15)||!sidOk) && Live.attempts<3){ Live.attempts++; setHint('ภาพยังไม่ชัด ถือนิ่ง ๆ…'); return; }
+  Live.attempts=0;
+  const src='กล้อง '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const {rec,replaced}=addResult(ex,r,g.data,src);
+  S.session.push({exam:ex.id, src, uid:rec.uid, replaced});
+  Live.lastSid=sidOk?res.sid:null; Live.lastAns=res.ans; Live.count++;
+  await persist();
+  feedback(true);
+  showLiveResult(ex,rec,replaced);
+  setHint('บันทึกแล้ว เปลี่ยนแผ่นถัดไปได้เลย','done');
+}
+function showLiveResult(ex,rec,replaced){
+  const el=document.getElementById('camRes'); if(!el) return;
+  const kc=keyCount(ex), s=scoreOf(ex,rec.ans), f=flagsOf(rec);
+  el.hidden=false; el.className='camres '+(f?'warnb':'okb');
+  el.innerHTML=`<div class="row" style="align-items:flex-start"><div class="grow"><div class="latest-score mono">${s}<small>/${kc}</small></div><div class="mono">${esc(rec.sid||'อ่านรหัสไม่ได้')}</div></div>
+    <div style="display:grid;gap:6px;justify-items:end">${f?`<span class="chip warn">ต้องตรวจ ${f} จุด</span>`:'<span class="chip ok">เรียบร้อย</span>'}${replaced?'<span class="chip plain">แทนผลเดิม</span>':''}</div></div>
+    <div class="row"><button id="camEdit">${f?'ดูข้อที่ต้องตรวจ':'ดู/แก้คำตอบ'}</button><button id="camAgain" class="ghost">สแกนแผ่นนี้ใหม่</button></div>`;
+  $('#camCount').textContent=`สแกนแล้ว ${Live.count} แผ่น`;
+  $('#camEdit').onclick=()=>{ Live.paused=true; openReview(rec.uid, ()=>{ Live.paused=false; const ex2=exam(); const r2=ex2.results.find(x=>x.uid===rec.uid); if(r2) showLiveResult(ex2,r2,replaced); }); };
+  $('#camAgain').onclick=()=>{ Live.lastSid=null; Live.lastAns=null; Live.lastReadAt=0; el.hidden=true; setHint('ถือนิ่ง ๆ…'); };
+}
+
+/* ---------- service worker ---------- */
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+$('#syncChip').onclick=()=>{ S.tab='gs'; S.pending=null; render(); };
+$('#installBtn').onclick=async()=>{ if(!deferredInstall) return; deferredInstall.prompt(); try{ await deferredInstall.userChoice; }catch(e){} deferredInstall=null; $('#installBtn').hidden=true; };
+boot();
+</script>
+</body>
+</html>

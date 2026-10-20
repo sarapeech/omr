@@ -1,0 +1,110 @@
+/**
+ * ตรวจข้อสอบ OMR → Google Sheet
+ * วางโค้ดนี้ใน ส่วนขยาย > Apps Script ของ Google Sheet ที่จะเก็บคะแนน
+ * แล้วทำให้ใช้งานได้เป็น "เว็บแอป" (สิทธิ์เข้าถึง: ทุกคน)
+ * ห้ามแก้ TOKEN ถ้าไม่ได้แก้ในแอปด้วย
+ */
+const TOKEN = '__TOKEN__';
+
+const FIXED = ['รหัสนักศึกษา', 'คะแนน', 'คะแนนเต็ม', 'ร้อยละ', 'ต้องตรวจ (จุด)', 'เวลาสแกน', 'รหัสอ้างอิง'];
+const UID_COL = 7;          // column G holds the app's record id
+const FIRST_ROW = 3;        // row 1 header, row 2 answer key
+
+function doGet() {
+  return out_({ ok: true, app: 'omr-skru', sheet: SpreadsheetApp.getActiveSpreadsheet().getName() });
+}
+
+function doPost(e) {
+  let body;
+  try { body = JSON.parse(e.postData.contents); } catch (err) { return out_({ ok: false, error: 'bad_json' }); }
+  if (!body || body.token !== TOKEN) return out_({ ok: false, error: 'token' });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    if (body.action === 'ping') return out_({ ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    if (body.action === 'sync') return out_(sync_(body));
+    return out_({ ok: false, error: 'action' });
+  } catch (err) {
+    return out_({ ok: false, error: String(err && err.message || err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sync_(body) {
+  const ex = body.exam;
+  const sh = sheetFor_(ex);
+  const n = Math.max(1, Math.min(100, ex.numQ | 0));
+  const width = FIXED.length + n;
+
+  // header + key rows
+  const head = FIXED.concat(Array.from({ length: n }, (_, i) => 'ข้อ ' + (i + 1)));
+  const keyRow = ['เฉลย', '', '', '', '', '', ''].concat(ex.keyTh.slice(0, n));
+  while (keyRow.length < width) keyRow.push('');
+  sh.getRange(1, 1, 2, width).setValues([head, keyRow]);
+  const lastCol = sh.getLastColumn();
+  if (lastCol > width) sh.getRange(1, width + 1, Math.max(1, sh.getLastRow()), lastCol - width).clearContent();
+  sh.getRange(1, 1, 2, width).setFontWeight('bold');
+  sh.getRange('A:A').setNumberFormat('@');
+  sh.getRange(1, UID_COL, Math.max(2, sh.getLastRow()), 1).setFontColor('#999999');
+  if (sh.getFrozenRows() !== 2) sh.setFrozenRows(2);
+
+  // existing rows by record id
+  const index = () => {
+    const last = sh.getLastRow(), map = {};
+    if (last >= FIRST_ROW) {
+      const ids = sh.getRange(FIRST_ROW, UID_COL, last - FIRST_ROW + 1, 1).getValues();
+      ids.forEach((r, i) => { if (r[0]) map[String(r[0])] = FIRST_ROW + i; });
+    }
+    return map;
+  };
+
+  // deletions, bottom-up so row numbers stay valid
+  let map = index();
+  const del = (body.deletes || []).map((u) => map[u]).filter(Boolean).sort((a, b) => b - a);
+  del.forEach((r) => sh.deleteRow(r));
+  if (del.length) map = index();
+
+  const appends = [], synced = [];
+  (body.rows || []).forEach((r) => {
+    const row = [String(r.sid || ''), r.score, r.total, r.pct, r.flags || '', r.at ? new Date(r.at) : '', r.uid]
+      .concat((r.ansTh || []).slice(0, n));
+    while (row.length < width) row.push('');
+    const at = map[r.uid];
+    if (at) sh.getRange(at, 1, 1, width).setValues([row]);
+    else appends.push(row);
+    synced.push(r.uid);
+  });
+  if (appends.length) {
+    const start = Math.max(sh.getLastRow() + 1, FIRST_ROW);
+    sh.getRange(start, 1, appends.length, width).setValues(appends);
+  }
+  const last = sh.getLastRow();
+  if (last > FIRST_ROW) sh.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, width).sort(1);
+  if (last >= FIRST_ROW) sh.getRange(FIRST_ROW, 6, last - FIRST_ROW + 1, 1).setNumberFormat('d/m/yyyy HH:mm');
+
+  return { ok: true, synced: synced, deleted: body.deletes || [], tab: sh.getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() + '#gid=' + sh.getSheetId() };
+}
+
+function sheetFor_(ex) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const want = safeName_(ex.name || 'ชุดข้อสอบ');
+  let sh = ss.getSheets().filter((s) => s.getRange('A1').getNote() === ex.id)[0];
+  if (!sh) {
+    let name = want, i = 2;
+    while (ss.getSheetByName(name)) name = want + ' (' + (i++) + ')';
+    sh = ss.insertSheet(name);
+    sh.getRange('A1').setNote(ex.id);
+  } else if (sh.getName() !== want && !ss.getSheetByName(want)) {
+    sh.setName(want);
+  }
+  return sh;
+}
+
+function safeName_(s) {
+  return String(s).replace(/[\[\]\*\?\/\\:]/g, ' ').trim().slice(0, 90) || 'ชุดข้อสอบ';
+}
+
+function out_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
