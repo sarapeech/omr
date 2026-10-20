@@ -480,7 +480,7 @@ const LAYOUT = {"page": [210, 297], "fid": [[11.5, 11.5], [198.5, 11.5], [198.5,
 const TH = ['ก','ข','ค','ง','จ'];
 const LET = 'ABCDE';
 const GS_CODE = "/**\n * ตรวจข้อสอบ OMR → Google Sheet\n * วางโค้ดนี้ใน ส่วนขยาย > Apps Script ของ Google Sheet ที่จะเก็บคะแนน\n * แล้วทำให้ใช้งานได้เป็น \"เว็บแอป\" (สิทธิ์เข้าถึง: ทุกคน)\n * ห้ามแก้ TOKEN ถ้าไม่ได้แก้ในแอปด้วย\n */\nconst TOKEN = '__TOKEN__';\n\nconst FIXED = ['รหัสนักศึกษา', 'คะแนน', 'คะแนนเต็ม', 'ร้อยละ', 'ต้องตรวจ (จุด)', 'เวลาสแกน', 'รหัสอ้างอิง'];\nconst UID_COL = 7;          // column G holds the app's record id\nconst FIRST_ROW = 3;        // row 1 header, row 2 answer key\n\nfunction doGet() {\n  return out_({ ok: true, app: 'omr-skru', sheet: SpreadsheetApp.getActiveSpreadsheet().getName() });\n}\n\nfunction doPost(e) {\n  let body;\n  try { body = JSON.parse(e.postData.contents); } catch (err) { return out_({ ok: false, error: 'bad_json' }); }\n  if (!body || body.token !== TOKEN) return out_({ ok: false, error: 'token' });\n  const lock = LockService.getScriptLock();\n  lock.waitLock(25000);\n  try {\n    if (body.action === 'ping') return out_({ ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });\n    if (body.action === 'sync') return out_(sync_(body));\n    return out_({ ok: false, error: 'action' });\n  } catch (err) {\n    return out_({ ok: false, error: String(err && err.message || err) });\n  } finally {\n    lock.releaseLock();\n  }\n}\n\nfunction sync_(body) {\n  const ex = body.exam;\n  const sh = sheetFor_(ex);\n  const n = Math.max(1, Math.min(100, ex.numQ | 0));\n  const width = FIXED.length + n;\n\n  // header + key rows\n  const head = FIXED.concat(Array.from({ length: n }, (_, i) => 'ข้อ ' + (i + 1)));\n  const keyRow = ['เฉลย', '', '', '', '', '', ''].concat(ex.keyTh.slice(0, n));\n  while (keyRow.length < width) keyRow.push('');\n  sh.getRange(1, 1, 2, width).setValues([head, keyRow]);\n  const lastCol = sh.getLastColumn();\n  if (lastCol > width) sh.getRange(1, width + 1, Math.max(1, sh.getLastRow()), lastCol - width).clearContent();\n  sh.getRange(1, 1, 2, width).setFontWeight('bold');\n  sh.getRange('A:A').setNumberFormat('@');\n  sh.getRange(1, UID_COL, Math.max(2, sh.getLastRow()), 1).setFontColor('#999999');\n  if (sh.getFrozenRows() !== 2) sh.setFrozenRows(2);\n\n  // existing rows by record id\n  const index = () => {\n    const last = sh.getLastRow(), map = {};\n    if (last >= FIRST_ROW) {\n      const ids = sh.getRange(FIRST_ROW, UID_COL, last - FIRST_ROW + 1, 1).getValues();\n      ids.forEach((r, i) => { if (r[0]) map[String(r[0])] = FIRST_ROW + i; });\n    }\n    return map;\n  };\n\n  // deletions, bottom-up so row numbers stay valid\n  let map = index();\n  const del = (body.deletes || []).map((u) => map[u]).filter(Boolean).sort((a, b) => b - a);\n  del.forEach((r) => sh.deleteRow(r));\n  if (del.length) map = index();\n\n  const appends = [], synced = [];\n  (body.rows || []).forEach((r) => {\n    const row = [String(r.sid || ''), r.score, r.total, r.pct, r.flags || '', r.at ? new Date(r.at) : '', r.uid]\n      .concat((r.ansTh || []).slice(0, n));\n    while (row.length < width) row.push('');\n    const at = map[r.uid];\n    if (at) sh.getRange(at, 1, 1, width).setValues([row]);\n    else appends.push(row);\n    synced.push(r.uid);\n  });\n  if (appends.length) {\n    const start = Math.max(sh.getLastRow() + 1, FIRST_ROW);\n    sh.getRange(start, 1, appends.length, width).setValues(appends);\n  }\n  const last = sh.getLastRow();\n  if (last > FIRST_ROW) sh.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, width).sort(1);\n  if (last >= FIRST_ROW) sh.getRange(FIRST_ROW, 6, last - FIRST_ROW + 1, 1).setNumberFormat('d/m/yyyy HH:mm');\n\n  return { ok: true, synced: synced, deleted: body.deletes || [], tab: sh.getName(), url: SpreadsheetApp.getActiveSpreadsheet().getUrl() + '#gid=' + sh.getSheetId() };\n}\n\nfunction sheetFor_(ex) {\n  const ss = SpreadsheetApp.getActiveSpreadsheet();\n  const want = safeName_(ex.name || 'ชุดข้อสอบ');\n  let sh = ss.getSheets().filter((s) => s.getRange('A1').getNote() === ex.id)[0];\n  if (!sh) {\n    let name = want, i = 2;\n    while (ss.getSheetByName(name)) name = want + ' (' + (i++) + ')';\n    sh = ss.insertSheet(name);\n    sh.getRange('A1').setNote(ex.id);\n  } else if (sh.getName() !== want && !ss.getSheetByName(want)) {\n    sh.setName(want);\n  }\n  return sh;\n}\n\nfunction safeName_(s) {\n  return String(s).replace(/[\\[\\]\\*\\?\\/\\\\:]/g, ' ').trim().slice(0, 90) || 'ชุดข้อสอบ';\n}\n\nfunction out_(o) {\n  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);\n}\n";
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const SEED = {name:'GESC401 Final 1/2569', numQ:60, key:'BEADEDBECACBCBDABDCBECAEAEDDADAAADBCEDABBADCEECECDBEDACDEEBA'};
 
 /* ---------- storage: this device (Google Sheet keeps the shared copy) ---------- */
@@ -1176,34 +1176,66 @@ async function openLive(){
   $('#layer').innerHTML=`<div class="cam" id="cam" role="dialog" aria-label="สแกนด้วยกล้อง">
     <video id="camVid" playsinline muted autoplay></video><canvas id="camOv"></canvas>
     <div class="camtop"><div><b>${esc(ex.name)}</b><span id="camCount">สแกนแล้ว 0 แผ่น</span></div>
-      <button id="camTorch" hidden>ไฟฉาย</button><button id="camClose" class="primary">เสร็จ</button></div>
+      <button id="camSwitch" hidden>สลับกล้อง</button><button id="camTorch" hidden>ไฟฉาย</button><button id="camClose" class="primary">เสร็จ</button></div>
     <div class="camhint" id="camHint">กำลังเปิดกล้อง…</div>
     <div class="camres" id="camRes" hidden></div></div>`;
   $('#camClose').onclick=closeLive;
   try{
-    Live.stream=await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}});
+    try{ await startCamera(Settings.camId||null); }
+    catch(e){ if(Settings.camId&&e&&e.name!=='NotAllowedError'){ Settings.camId=''; saveSettings(); await startCamera(null); } else throw e; }
   }catch(e){
     closeLive();
     toast(e&&e.name==='NotAllowedError'?'แอปยังไม่ได้รับอนุญาตให้ใช้กล้อง เปิดสิทธิ์กล้องในการตั้งค่าของเบราว์เซอร์':'เปิดกล้องไม่ได้ ใช้ปุ่ม “ถ่ายรูป” แทน');
     return;
   }
-  if(!Live.on){ Live.stream.getTracks().forEach(t=>t.stop()); return; }
-  const v=$('#camVid'); v.srcObject=Live.stream; try{ await v.play(); }catch(e){}
-  Live.track=Live.stream.getVideoTracks()[0];
+  if(!Live.on){ stopCamera(); return; }
+  // phones with several back lenses may hand the browser a zoom lens; prefer the main one
   try{
-    const cap=Live.track.getCapabilities&&Live.track.getCapabilities();
-    if(cap&&cap.torch){ const t=$('#camTorch'); t.hidden=false; let on=false;
-      t.onclick=async()=>{ on=!on; try{ await Live.track.applyConstraints({advanced:[{torch:on}]}); t.classList.toggle('on',on); }catch(e){ on=!on; } }; }
-    if(cap&&cap.focusMode&&cap.focusMode.includes('continuous')) Live.track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+    Live.cams=await backCameras();
+    if(!Settings.camId && Live.cams.length>1){
+      const g=mainGuess(Live.cams), cur=Live.track.getSettings().deviceId;
+      if(g&&g.deviceId&&g.deviceId!==cur){ try{ await startCamera(g.deviceId); }catch(e){ await startCamera(null); } }
+    }
+    if(Live.cams.length>1){
+      const sw=$('#camSwitch'); sw.hidden=false;
+      sw.onclick=async()=>{
+        const cur=Live.track.getSettings().deviceId;
+        const i=Math.max(0,Live.cams.findIndex(d=>d.deviceId===cur)), n=Live.cams[(i+1)%Live.cams.length];
+        try{ await startCamera(n.deviceId); Settings.camId=n.deviceId; saveSettings(); setHint(`กล้องหลังตัวที่ ${(i+1)%Live.cams.length+1} จาก ${Live.cams.length}`); }
+        catch(e){ toast('เปิดกล้องตัวนี้ไม่ได้'); try{ await startCamera(cur); }catch(_){} }
+      };
+    }
   }catch(e){}
   try{ Live.wake=await navigator.wakeLock.request('screen'); }catch(e){}
   Live.small=document.createElement('canvas'); Live.full=document.createElement('canvas');
   setHint('เล็งให้เห็นสี่เหลี่ยมดำครบ 4 มุม');
   liveLoop();
 }
+async function backCameras(){
+  const all=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+  const back=all.filter(d=>/back|rear|environment|หลัง/i.test(d.label));
+  return back.length?back:all;
+}
+function mainGuess(list){ return list.find(d=>/\b0, facing back/i.test(d.label))||list.find(d=>/camera2 0\b/i.test(d.label))||list[0]; }
+function stopCamera(){ try{ Live.stream&&Live.stream.getTracks().forEach(t=>t.stop()); }catch(e){} Live.stream=null; }
+async function startCamera(deviceId){
+  stopCamera();
+  const base={width:{ideal:1920}, height:{ideal:1440}};
+  Live.stream=await navigator.mediaDevices.getUserMedia({audio:false, video: deviceId?Object.assign({deviceId:{exact:deviceId}},base):Object.assign({facingMode:{ideal:'environment'}},base)});
+  const v=$('#camVid'); if(v){ v.srcObject=Live.stream; try{ await v.play(); }catch(e){} }
+  Live.track=Live.stream.getVideoTracks()[0]; Live.prev=null; Live.stable=0;
+  const t=$('#camTorch'); if(t){ t.hidden=true; t.classList.remove('on'); }
+  try{
+    const cap=Live.track.getCapabilities&&Live.track.getCapabilities(), st=Live.track.getSettings();
+    if(cap&&cap.torch&&t){ t.hidden=false; let on=false;
+      t.onclick=async()=>{ on=!on; try{ await Live.track.applyConstraints({advanced:[{torch:on}]}); t.classList.toggle('on',on); }catch(e){ on=!on; } }; }
+    if(cap&&cap.focusMode&&cap.focusMode.includes('continuous')) Live.track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+    if(cap&&cap.zoom&&st&&st.zoom>cap.zoom.min) Live.track.applyConstraints({advanced:[{zoom:cap.zoom.min}]}).catch(()=>{});
+  }catch(e){}
+}
 function closeLive(){
   Live.on=false; clearTimeout(Live.t);
-  try{ Live.stream&&Live.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  stopCamera();
   try{ Live.wake&&Live.wake.release(); }catch(e){}
   Live.stream=null; Live.wake=null; $('#layer').innerHTML=''; render();
 }
@@ -1226,8 +1258,8 @@ async function liveLoop(){
         Live.prev=loc.corners;
         Live.stable = mv<0.015 ? Live.stable+1 : 1;
         const area=quadArea(loc.corners)/(W*H);
-        drawOverlay(loc.corners,g.s,Live.stable>=3&&area>=0.25);
-        if(area<0.25){ setHint('เลื่อนกล้องเข้าใกล้อีกนิด ให้กระดาษเต็มจอ'); Live.stable=0; }
+        drawOverlay(loc.corners,g.s,Live.stable>=3&&area>=0.2);
+        if(area<0.2){ setHint('เลื่อนกล้องเข้าใกล้อีกนิด ให้กระดาษเต็มจอ'); Live.stable=0; }
         else if(Live.stable<3){ if(!/ตรวจแล้ว|บันทึกแล้ว/.test(($('#camHint')||{}).textContent||'')) setHint('ถือนิ่ง ๆ…'); }
         else if(Date.now()-Live.lastReadAt>650){ await liveRead(v); delay=220; }
       }
