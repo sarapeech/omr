@@ -1,6 +1,6 @@
-// offline cache for the app shell; Google Sheet requests always go to the network
-const CACHE = 'omr-1.1.0';
-const ASSETS = ["./", "index.html", "manifest.webmanifest", "answer-sheet.pdf", "answer-sheet.png", "vendor/pdf.min.js", "vendor/pdf.worker.min.js", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png", "fonts/sarabun-thai-400.woff2", "fonts/sarabun-latin-400.woff2", "fonts/sarabun-thai-600.woff2", "fonts/sarabun-latin-600.woff2", "fonts/sarabun-thai-700.woff2", "fonts/sarabun-latin-700.woff2"];
+// offline cache for the app; Google Sheet requests always go to the network
+const CACHE = 'omr-2.1.0';
+const ASSETS = ["./", "index.html", "app.js", "omr.js", "layout.js", "gscode.js", "manifest.webmanifest", "vendor/pdf.min.js", "vendor/pdf.worker.min.js", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "fonts/sarabun-latin-400.woff2", "fonts/sarabun-latin-600.woff2", "fonts/sarabun-latin-700.woff2", "fonts/sarabun-thai-400.woff2", "fonts/sarabun-thai-600.woff2", "fonts/sarabun-thai-700.woff2"];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
